@@ -569,12 +569,42 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         writers_by_real['순위'] = range(1, len(writers_by_real)+1)
         writers_by_real['평균조회수'] = (writers_by_real['총조회수']/writers_by_real['기사수']).astype(int)
         
+        # 비율 계산
+        total_views = writers_by_real['총조회수'].sum()
+        avg_views_mean = writers_by_real['평균조회수'].mean()
+        
         st.markdown('<div class="sub-header">본명 기준</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
+        
         disp_w = writers_by_real.copy()
-        for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
-        disp_w = disp_w[['순위', '본명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
-        disp_w.columns = ['순위', '본명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-        st.dataframe(disp_w, use_container_width=True, hide_index=True)
+        # 비율 계산 및 포맷팅
+        disp_w['총조회수_비율'] = (disp_w['총조회수'] / total_views * 100).round(1) if total_views > 0 else 0
+        disp_w['평균조회수_비율'] = (disp_w['평균조회수'] / avg_views_mean * 100).round(1) if avg_views_mean > 0 else 0
+        
+        # 포맷팅: 숫자 + 비율
+        disp_w['총조회수_포맷'] = disp_w.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
+        disp_w['평균조회수_포맷'] = disp_w.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
+        disp_w['좋아요_포맷'] = disp_w['좋아요'].apply(lambda x: f"{x:,}")
+        disp_w['댓글_포맷'] = disp_w['댓글'].apply(lambda x: f"{x:,}")
+        
+        disp_w = disp_w[['순위', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
+        disp_w.columns = ['순위', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']
+        
+        # 스타일링: 숫자 컬럼 오른쪽 정렬
+        st.dataframe(
+            disp_w, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "순위": st.column_config.NumberColumn("순위", format="%d"),
+                "본명": st.column_config.TextColumn("본명"),
+                "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
+                "전체 조회수": st.column_config.TextColumn("전체 조회수"),
+                "기사 1건 당 평균 조회수": st.column_config.TextColumn("기사 1건 당 평균 조회수"),
+                "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
+                "댓글 개수": st.column_config.TextColumn("댓글 개수")
+            }
+        )
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -597,12 +627,42 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
             writers_by_pen['순위'] = range(1, len(writers_by_pen)+1)
             writers_by_pen['평균조회수'] = (writers_by_pen['총조회수']/writers_by_pen['기사수']).astype(int)
             
+            # 비율 계산
+            total_views_pen = writers_by_pen['총조회수'].sum()
+            avg_views_mean_pen = writers_by_pen['평균조회수'].mean()
+            
             st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
+            
             disp_w_pen = writers_by_pen.copy()
-            for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w_pen[c] = disp_w_pen[c].apply(lambda x: f"{x:,}")
-            disp_w_pen = disp_w_pen[['순위', '필명', '본명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
-            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-            st.dataframe(disp_w_pen, use_container_width=True, hide_index=True)
+            # 비율 계산 및 포맷팅
+            disp_w_pen['총조회수_비율'] = (disp_w_pen['총조회수'] / total_views_pen * 100).round(1) if total_views_pen > 0 else 0
+            disp_w_pen['평균조회수_비율'] = (disp_w_pen['평균조회수'] / avg_views_mean_pen * 100).round(1) if avg_views_mean_pen > 0 else 0
+            
+            # 포맷팅: 숫자 + 비율
+            disp_w_pen['총조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
+            disp_w_pen['평균조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
+            disp_w_pen['좋아요_포맷'] = disp_w_pen['좋아요'].apply(lambda x: f"{x:,}")
+            disp_w_pen['댓글_포맷'] = disp_w_pen['댓글'].apply(lambda x: f"{x:,}")
+            
+            disp_w_pen = disp_w_pen[['순위', '필명', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
+            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']
+            
+            st.dataframe(
+                disp_w_pen, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "순위": st.column_config.NumberColumn("순위", format="%d"),
+                    "필명": st.column_config.TextColumn("필명"),
+                    "본명": st.column_config.TextColumn("본명"),
+                    "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
+                    "전체 조회수": st.column_config.TextColumn("전체 조회수"),
+                    "기사 1건 당 평균 조회수": st.column_config.TextColumn("기사 1건 당 평균 조회수"),
+                    "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
+                    "댓글 개수": st.column_config.TextColumn("댓글 개수")
+                }
+            )
         else: 
             st.info("필명 기자 실적 없음")
     
@@ -611,8 +671,8 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
     <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
     <strong>산식:</strong><br>
     • 발행기사 수: 기자별 기사 수 합계<br>
-    • 전체 조회 수: 기자별 기사 조회수 합계<br>
-    • 기사 1건 당 평균 조회 수: 총조회수 ÷ 발행기사 수<br>
+    • 전체 조회수: 기자별 기사 조회수 합계 (전체 대비 비율 %)<br>
+    • 기사 1건 당 평균 조회수: 총조회수 ÷ 발행기사 수 (평균 대비 비율 %)<br>
     • 순위: 총조회수 기준 내림차순 정렬
     </div>
     """, unsafe_allow_html=True)

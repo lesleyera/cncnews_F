@@ -8,6 +8,9 @@ def clean_author_name(name):
     # 직함 제거: 전문기자, 기자 등
     name = name.replace('#', '').replace('전문기자', '').replace('기자', '').strip()
     
+    # 공백 없이 붙어있는 직함 제거 (예: "김성민편집인" -> "김성민")
+    name = name.replace('편집인', '').replace('전문', '').replace('편집', '').strip()
+    
     # 2어절 직함 제거: 편집인, 전문 등
     words = name.split()
     if len(words) >= 2:
