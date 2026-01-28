@@ -94,8 +94,8 @@ if st.session_state['print_mode']:
     
     views.render_top10_detail(df_top10)
     st.markdown("<br>", unsafe_allow_html=True)
-    # [수정] df_all_articles_sources 인자 추가 (전체 기사 유입경로 데이터)
-    views.render_top10_trends(df_all_articles_with_metadata, df_all_articles_sources)
+    # [수정] df_top10_sources 인자 추가
+    views.render_top10_trends(df_top10, df_top10_sources)
     
     st.markdown('<div class="page-break"></div>', unsafe_allow_html=True)
     
