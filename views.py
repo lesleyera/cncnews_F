@@ -268,12 +268,16 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
 def render_top10_detail(df_top10):
     st.markdown('<div class="section-header-container"><div class="section-header">4. 최근 7일 조회수 TOP 10 기사 상세</div></div>', unsafe_allow_html=True)
     if not df_top10.empty:
+        from utils import clean_author_name
         df_p4 = df_top10.copy()
         def safe_format_int(x):
             try: return f"{int(float(x)):,}"
             except: return str(x)
         for c in ['전체조회수','전체방문자수','좋아요','댓글']: 
             df_p4[c] = df_p4[c].apply(safe_format_int)
+        # 작성자에서 직함 제거 (1어절만 남김)
+        if '작성자' in df_p4.columns:
+            df_p4['작성자'] = df_p4['작성자'].apply(clean_author_name)
         df_p4_display = df_p4.copy()
         df_p4_display = df_p4_display.rename(columns={
             '전체조회수': '최근 7일간 조회수',
@@ -301,12 +305,17 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     st.markdown('<div class="section-header-container"><div class="section-header">5. TOP 10 기사 유입경로(매체)별 조회수 분포</div></div>', unsafe_allow_html=True)
     
     if not df_top10.empty:
+        from utils import clean_author_name
         df_p5 = df_top10.copy()
         def safe_format_int_col(x):
             try:
                 val_str = str(x).replace(',', '')
                 return f"{int(float(val_str)):,}"
             except: return str(x)
+        
+        # 작성자에서 직함 제거 (1어절만 남김)
+        if '작성자' in df_p5.columns:
+            df_p5['작성자'] = df_p5['작성자'].apply(clean_author_name)
         
         df_p5['전체조회수_fmt'] = df_p5['전체조회수'].apply(safe_format_int_col)
         df_p5 = df_p5.rename(columns={'전체조회수_fmt': '지난 7일간 조회수'})
@@ -590,6 +599,9 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         disp_w['좋아요_포맷'] = disp_w['좋아요'].apply(lambda x: f"{x:,}")
         disp_w['댓글_포맷'] = disp_w['댓글'].apply(lambda x: f"{x:,}")
         
+        # 본명에서 직함 제거 (1어절만 남김)
+        disp_w['본명'] = disp_w['본명'].apply(clean_author_name)
+        
         disp_w = disp_w[['순위', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
         disp_w.columns = ['순위', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']
         
@@ -651,6 +663,10 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
             disp_w_pen['평균조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
             disp_w_pen['좋아요_포맷'] = disp_w_pen['좋아요'].apply(lambda x: f"{x:,}")
             disp_w_pen['댓글_포맷'] = disp_w_pen['댓글'].apply(lambda x: f"{x:,}")
+            
+            # 본명에서 직함 제거 (1어절만 남김)
+            disp_w_pen['본명'] = disp_w_pen['본명'].apply(clean_author_name)
+            disp_w_pen['필명'] = disp_w_pen['필명'].apply(clean_author_name)
             
             disp_w_pen = disp_w_pen[['순위', '필명', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
             disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']

@@ -47,6 +47,30 @@ header[data-testid="stHeader"] {{ visibility: hidden !important; }}
 [data-testid="stDataFrame"] tbody td:nth-child(5),
 [data-testid="stDataFrame"] tbody td:nth-child(6),
 [data-testid="stDataFrame"] tbody td:nth-child(7) {{ text-align: right !important; }}
+/* 표 스크롤 제거 - 모든 데이터 표시 */
+[data-testid="stDataFrame"] {{
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}}
+[data-testid="stDataFrame"] > div {{
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}}
+[data-testid="stDataFrame"] > div > div {{
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}}
+[data-testid="stDataFrame"] table {{
+    display: table !important;
+}}
+div[data-testid="stDataFrameContainer"] {{
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}}
 .footer-note {{ font-size: 1rem; color: #78909c; margin-top: 50px; border-top: 1px solid #eceff1; padding-top: 15px; text-align: center; }}
 </style>
 """
