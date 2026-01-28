@@ -828,10 +828,51 @@ def load_all_dashboard_data(selected_week):
                 df_all_articles_with_metadata = pd.DataFrame()
         else:
             df_all_articles_with_metadata = pd.DataFrame()
+        
+        # 7. 전체 기사에 대한 유입경로 데이터 수집 (5페이지용)
+        df_all_articles_sources = pd.DataFrame()
+        if not df_all_articles_with_metadata.empty:
+            all_paths = df_all_articles_with_metadata['경로'].tolist()
+            
+            if all_paths:
+                # 전체 기사의 paths를 필터로 사용하여 유입경로 데이터 조회
+                filter_all_paths = FilterExpression(
+                    filter=Filter(
+                        field_name="pagePath",
+                        in_list_filter=Filter.InListFilter(values=all_paths, case_sensitive=False)
+                    )
+                )
+                
+                # 유입경로 데이터 수집 (pagePath, sessionSource별 조회수)
+                df_all_sources_raw = run_ga4_report(
+                    s_dt, e_dt, 
+                    ["pagePath", "sessionSource"], 
+                    ["screenPageViews"], 
+                    limit=10000, 
+                    dimension_filter=filter_all_paths
+                )
+                
+                if not df_all_sources_raw.empty:
+                    # category (네이버, 구글 등) 매핑
+                    df_all_sources_raw['category'] = df_all_sources_raw['sessionSource'].apply(map_source)
+                    
+                    # (pagePath, category) 그룹핑 + 툴팁용 상세 경로(top_detail) 추출
+                    # 그룹별 최다 유입 raw source 찾기
+                    df_all_grp_best = df_all_sources_raw.sort_values('screenPageViews', ascending=False).drop_duplicates(['pagePath', 'category'])
+                    df_all_grp_best = df_all_grp_best[['pagePath', 'category', 'sessionSource']].rename(columns={'sessionSource': 'top_detail'})
+                    
+                    # 그룹별 조회수 합계
+                    df_all_grp_sum = df_all_sources_raw.groupby(['pagePath', 'category'], as_index=False)['screenPageViews'].sum()
+                    
+                    # 병합 (합계 + 상세경로)
+                    df_all_articles_sources = pd.merge(df_all_grp_sum, df_all_grp_best, on=['pagePath', 'category'], how='left')
+                    df_all_articles_sources = df_all_articles_sources.rename(columns={'category': '유입경로'})
+        else:
+            df_all_articles_sources = pd.DataFrame()
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
-            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata)
+            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata, df_all_articles_sources)
 
 def get_writers_df_real(df_target):
     # 1. 엑셀 데이터로부터 매핑 딕셔너리 생성 (필명 -> 본명)

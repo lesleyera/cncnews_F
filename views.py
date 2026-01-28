@@ -342,74 +342,144 @@ def render_top10_detail(df_top10):
     """, unsafe_allow_html=True)
 
 # ----------------- 5. Top 10 추이 -----------------
-def render_top10_trends(df_top10, df_top10_sources=None):
-    st.markdown('<div class="section-header-container"><div class="section-header">5. TOP 10 기사 유입경로(매체)별 조회수 분포</div></div>', unsafe_allow_html=True)
+def render_top10_trends(df_all_articles, df_all_articles_sources=None):
+    st.markdown('<div class="section-header-container"><div class="section-header">5. 기사별 유입경로(매체)별 조회수 분포</div></div>', unsafe_allow_html=True)
     
-    if not df_top10.empty:
+    if not df_all_articles.empty:
+        import re
         from utils import clean_author_name
-        df_p5 = df_top10.copy()
-        def safe_format_int_col(x):
-            try:
-                val_str = str(x).replace(',', '')
-                return f"{int(float(val_str)):,}"
-            except: return str(x)
         
-        # 작성자에서 직함 제거 (1어절만 남김)
-        if '작성자' in df_p5.columns:
-            df_p5['작성자'] = df_p5['작성자'].apply(clean_author_name)
+        # 조회수 기준으로 순위 매기기 및 정렬
+        df_sorted = df_all_articles.copy()
+        df_sorted = df_sorted.sort_values('전체조회수', ascending=False)
+        df_sorted['순위'] = range(1, len(df_sorted) + 1)
         
-        df_p5['전체조회수_fmt'] = df_p5['전체조회수'].apply(safe_format_int_col)
-        df_p5 = df_p5.rename(columns={'전체조회수_fmt': '지난 7일간 조회수'})
+        # URL에서 고유 숫자 추출 함수
+        def extract_article_id(path):
+            """URL에서 고유 숫자 추출 (예: /news/article/view/12345 -> 12345)"""
+            if not path:
+                return None
+            # URL에서 마지막 숫자 패턴 찾기
+            match = re.search(r'/(\d+)(?:/|$)', str(path))
+            if match:
+                return match.group(1)
+            return None
         
-        cols = ['순위', '제목', '작성자', '발행일시', '지난 7일간 조회수', '유입경로 1순위']
-        if '유입경로 1순위' not in df_p5.columns:
-            df_p5['유입경로 1순위'] = "-"
+        # 기사 식별자 생성: 제목 또는 URL의 고유 숫자
+        df_sorted['기사ID'] = df_sorted.apply(
+            lambda row: extract_article_id(row.get('경로', '')) or str(row.get('제목', '')),
+            axis=1
+        )
+        
+        # 유입경로 데이터 처리
+        if df_all_articles_sources is not None and not df_all_articles_sources.empty:
+            # pagePath를 경로로 매핑
+            path_to_title = dict(zip(df_sorted['경로'], df_sorted['제목']))
+            path_to_id = dict(zip(df_sorted['경로'], df_sorted['기사ID']))
             
-        st.dataframe(df_p5[cols], use_container_width=True, hide_index=True, height="content")
-        
-        if df_top10_sources is not None and not df_top10_sources.empty:
-            path_to_title = dict(zip(df_top10['경로'], df_top10['제목']))
-            df_src = df_top10_sources.copy()
+            df_src = df_all_articles_sources.copy()
             df_src['기사제목'] = df_src['pagePath'].map(path_to_title).fillna('기타')
+            df_src['기사ID'] = df_src['pagePath'].map(path_to_id).fillna('')
             
-            df_src['기사제목_short'] = df_src['기사제목'].apply(lambda x: x[:10] + '...' if len(str(x)) > 10 else str(x))
+            # 기사별 유입경로별 조회수 정리 (기사ID 기준으로 그룹화)
+            # 같은 기사ID는 같은 기사로 간주
+            df_src_grouped = df_src.groupby(['기사ID', '기사제목', '유입경로'], as_index=False)['screenPageViews'].sum()
             
-            short_titles_ordered = [t[:10] + '...' if len(str(t)) > 10 else str(t) for t in df_top10['제목'].tolist()]
-            short_titles_ordered.reverse()
+            # 기사별 총 조회수 계산
+            article_total_views = df_src_grouped.groupby('기사ID')['screenPageViews'].sum().reset_index()
+            article_total_views.columns = ['기사ID', '총조회수']
             
-            fig = px.bar(
-                df_src, 
-                x='screenPageViews',   
-                y='기사제목_short',     
-                color='유입경로',
-                text='screenPageViews',
-                title='기사별 유입경로 비중',
-                orientation='h',       
-                color_discrete_sequence=CHART_PALETTE,
-                hover_data={'top_detail': True, 'screenPageViews': True, '기사제목': True, '기사제목_short': False}
-            )
+            # 순위 매기기 (총 조회수 기준)
+            article_total_views = article_total_views.sort_values('총조회수', ascending=False)
+            article_total_views['순위'] = range(1, len(article_total_views) + 1)
             
-            fig.update_traces(hovertemplate='<b>%{y}</b><br>유입경로: %{legendgroup}<br>상세경로: %{customdata[0]}<br>조회수: %{x}<extra></extra>')
+            # 순위 정보 병합
+            df_src_grouped = pd.merge(df_src_grouped, article_total_views[['기사ID', '순위', '총조회수']], on='기사ID', how='left')
             
-            fig.update_layout(
-                plot_bgcolor='white',
-                xaxis_title='조회수',
-                yaxis_title='기사 (요약)',
-                legend_title_text='유입경로'
-            )
-            fig.update_yaxes(categoryorder='array', categoryarray=short_titles_ordered)
+            # 순위대로 정렬
+            df_src_grouped = df_src_grouped.sort_values(['순위', 'screenPageViews'], ascending=[True, False])
             
-            st.plotly_chart(fig, use_container_width=True, key="top10_source_distribution_chart")
+            # 표시용 테이블 생성: 기사별 유입경로별 조회수
+            display_data = []
+            current_article_id = None
+            current_rank = None
+            current_title = None
+            
+            for _, row in df_src_grouped.iterrows():
+                article_id = row['기사ID']
+                rank = row['순위']
+                title = row['기사제목']
+                source = row['유입경로']
+                views = row['screenPageViews']
+                total_views = row['총조회수']
+                
+                # 같은 기사면 순위와 제목을 공유
+                if article_id != current_article_id:
+                    current_article_id = article_id
+                    current_rank = rank
+                    current_title = title
+                
+                display_data.append({
+                    '순위': current_rank,
+                    '기사제목': current_title,
+                    '기사ID': article_id,
+                    '유입경로': source,
+                    '조회수': f"{int(views):,}",
+                    '총조회수': f"{int(total_views):,}"
+                })
+            
+            df_display = pd.DataFrame(display_data)
+            
+            # 테이블 표시
+            st.dataframe(df_display[['순위', '기사제목', '기사ID', '유입경로', '조회수', '총조회수']], 
+                        use_container_width=True, hide_index=True, height="content")
+            
+            # 차트 표시 (상위 20개 기사만)
+            top_20_ids = article_total_views.head(20)['기사ID'].tolist()
+            df_chart = df_src_grouped[df_src_grouped['기사ID'].isin(top_20_ids)].copy()
+            
+            if not df_chart.empty:
+                df_chart['기사제목_short'] = df_chart['기사제목'].apply(lambda x: x[:15] + '...' if len(str(x)) > 15 else str(x))
+                
+                # 순위 순서대로 정렬
+                title_order = df_chart.sort_values('순위')['기사제목_short'].unique().tolist()
+                title_order.reverse()
+                
+                fig = px.bar(
+                    df_chart, 
+                    x='screenPageViews',   
+                    y='기사제목_short',     
+                    color='유입경로',
+                    text='screenPageViews',
+                    title='기사별 유입경로 비중 (상위 20개)',
+                    orientation='h',       
+                    color_discrete_sequence=CHART_PALETTE,
+                    hover_data={'top_detail': True, 'screenPageViews': True, '기사제목': True, '기사제목_short': False}
+                )
+                
+                fig.update_traces(hovertemplate='<b>%{y}</b><br>유입경로: %{legendgroup}<br>조회수: %{x}<extra></extra>')
+                
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    xaxis_title='조회수',
+                    yaxis_title='기사 (요약)',
+                    legend_title_text='유입경로'
+                )
+                fig.update_yaxes(categoryorder='array', categoryarray=title_order)
+                
+                st.plotly_chart(fig, use_container_width=True, key="all_articles_source_distribution_chart")
         else:
             st.warning("기사별 유입경로 상세 데이터가 없습니다.")
+    else:
+        st.info("기사 데이터가 없습니다.")
     
     # 산식 각주
     st.markdown("""
     <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
     <strong>산식:</strong><br>
     • 유입경로별 조회수: GA4 sessionSource별 screenPageViews 합계<br>
-    • 유입경로 1순위: 해당 기사에 가장 많이 유입된 경로<br>
-    • 조회수 분포: 기사별 유입경로(매체)별 조회수 비중
+    • 기사 식별: 기사제목 또는 URL의 고유숫자로 완전 일치 확인<br>
+    • 순위: 기사별 총 조회수 기준 내림차순 정렬
     </div>
     """, unsafe_allow_html=True)
 
