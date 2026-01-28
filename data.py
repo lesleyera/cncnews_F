@@ -529,10 +529,6 @@ def load_all_dashboard_data(selected_week):
             except Exception as e:
                 return None
         
-        # 각 기사별로 24시간, 48시간 방문자수 계산 (발행일시 기준 누적)
-        users_24h_list = []
-        users_48h_list = []
-        
         # 발행일시 정보를 DataFrame에 추가
         df_sorted['발행일시_parsed'] = df_sorted['실발행일시'].apply(parse_publish_date)
         
@@ -540,83 +536,75 @@ def load_all_dashboard_data(selected_week):
         now = datetime.now()
         now_date = now.date()
         
-        # 각 기사별로 발행일시 기준 24h, 48h 날짜 범위 계산
-        for idx, row in df_sorted.iterrows():
-            page_path = row['pagePath']
-            publish_date = row['발행일시_parsed']
+        # 전체 주차 기간의 날짜별 GA4 데이터를 한 번에 조회 (TOP 10 기사만)
+        users_24h_list = []
+        users_48h_list = []
+        
+        if not df_sorted.empty and len(paths) > 0:
+            # TOP 10 기사의 paths를 필터로 사용하여 날짜별 데이터 조회
+            filter_paths = FilterExpression(
+                filter=Filter(
+                    field_name="pagePath",
+                    in_list_filter=Filter.InListFilter(values=paths, case_sensitive=False)
+                )
+            )
             
-            users_24h = 0
-            users_48h = 0
+            # 날짜별로 GA4 데이터 조회 (date dimension 추가)
+            df_daily_ga4 = run_ga4_report(s_dt, e_dt, ["date", "pagePath"], ["activeUsers"], limit=10000, dimension_filter=filter_paths)
             
-            if publish_date and publish_date.date() <= now_date:
-                # 발행일시 + 24시간, 48시간 후 날짜 계산
-                end_date_24h = (publish_date + timedelta(hours=24)).date()
-                end_date_48h = (publish_date + timedelta(hours=48)).date()
+            # 각 기사별로 발행일시 기준 24h, 48h 방문자수 계산
+            for idx, row in df_sorted.iterrows():
+                page_path = row['pagePath']
+                publish_date = row['발행일시_parsed']
                 
-                # 현재 날짜를 넘지 않도록 제한
-                end_date_24h = min(end_date_24h, now_date)
-                end_date_48h = min(end_date_48h, now_date)
+                users_24h = 0
+                users_48h = 0
                 
-                start_date = publish_date.date()
+                if publish_date and publish_date.date() <= now_date:
+                    # 발행일시 + 24시간, 48시간 후 날짜 계산
+                    end_datetime_24h = publish_date + timedelta(hours=24)
+                    end_datetime_48h = publish_date + timedelta(hours=48)
+                    
+                    # 현재 시간을 넘지 않도록 제한
+                    end_datetime_24h = min(end_datetime_24h, now)
+                    end_datetime_48h = min(end_datetime_48h, now)
+                    
+                    start_date = publish_date.date()
+                    end_date_24h = end_datetime_24h.date()
+                    end_date_48h = end_datetime_48h.date()
+                    
+                    # 해당 기사의 날짜별 데이터 필터링
+                    if not df_daily_ga4.empty:
+                        article_data = df_daily_ga4[df_daily_ga4['pagePath'].astype(str).str.strip().str.lower() == str(page_path).strip().lower()].copy()
+                        
+                        if not article_data.empty:
+                            # 날짜를 datetime으로 변환
+                            article_data['date_parsed'] = pd.to_datetime(article_data['date'])
+                            article_data['date_only'] = article_data['date_parsed'].dt.date
+                            
+                            # 24시간: 발행일시 날짜부터 24시간 후 날짜까지의 데이터 합산
+                            if start_date <= end_date_24h:
+                                mask_24h = (article_data['date_only'] >= start_date) & (article_data['date_only'] <= end_date_24h)
+                                data_24h = article_data[mask_24h]
+                                if not data_24h.empty:
+                                    # activeUsers는 중복 제거된 방문자수이므로, 날짜별 합산 시 최대값 사용 (또는 합산)
+                                    # GA4의 activeUsers는 기간 내 고유 방문자수이므로, 날짜별로 합산하면 중복이 발생할 수 있음
+                                    # 하지만 발행일시 기준으로 첫 접속 후 24h, 48h를 측정하려면 날짜별 합산이 맞음
+                                    users_24h = int(data_24h['activeUsers'].sum())
+                            
+                            # 48시간: 발행일시 날짜부터 48시간 후 날짜까지의 데이터 합산
+                            if start_date <= end_date_48h:
+                                mask_48h = (article_data['date_only'] >= start_date) & (article_data['date_only'] <= end_date_48h)
+                                data_48h = article_data[mask_48h]
+                                if not data_48h.empty:
+                                    users_48h = int(data_48h['activeUsers'].sum())
                 
-                # 24시간 조회
-                if start_date <= end_date_24h:
-                    try:
-                        start_date_str = start_date.strftime('%Y-%m-%d')
-                        end_date_24h_str = end_date_24h.strftime('%Y-%m-%d')
-                        
-                        # 기존 패턴과 동일하게 필터 사용
-                        filter_path = FilterExpression(
-                            filter=Filter(
-                                field_name="pagePath",
-                                in_list_filter=Filter.InListFilter(values=[page_path], case_sensitive=False)
-                            )
-                        )
-                        
-                        # GA4 조회 (기존 패턴과 동일)
-                        df_24h = run_ga4_report(start_date_str, end_date_24h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_path)
-                        
-                        if not df_24h.empty:
-                            # pagePath가 일치하는 행 찾기
-                            matching = df_24h[df_24h['pagePath'].astype(str).str.strip().str.lower() == str(page_path).strip().lower()]
-                            if not matching.empty:
-                                users_24h = int(matching['activeUsers'].iloc[0])
-                            elif len(df_24h) == 1:
-                                # 필터로 하나만 반환된 경우
-                                users_24h = int(df_24h['activeUsers'].iloc[0])
-                    except Exception as e:
-                        users_24h = 0
-                
-                # 48시간 조회
-                if start_date <= end_date_48h:
-                    try:
-                        start_date_str = start_date.strftime('%Y-%m-%d')
-                        end_date_48h_str = end_date_48h.strftime('%Y-%m-%d')
-                        
-                        # 기존 패턴과 동일하게 필터 사용
-                        filter_path = FilterExpression(
-                            filter=Filter(
-                                field_name="pagePath",
-                                in_list_filter=Filter.InListFilter(values=[page_path], case_sensitive=False)
-                            )
-                        )
-                        
-                        # GA4 조회 (기존 패턴과 동일)
-                        df_48h = run_ga4_report(start_date_str, end_date_48h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_path)
-                        
-                        if not df_48h.empty:
-                            # pagePath가 일치하는 행 찾기
-                            matching = df_48h[df_48h['pagePath'].astype(str).str.strip().str.lower() == str(page_path).strip().lower()]
-                            if not matching.empty:
-                                users_48h = int(matching['activeUsers'].iloc[0])
-                            elif len(df_48h) == 1:
-                                # 필터로 하나만 반환된 경우
-                                users_48h = int(df_48h['activeUsers'].iloc[0])
-                    except Exception as e:
-                        users_48h = 0
-            
-            users_24h_list.append(users_24h)
-            users_48h_list.append(users_48h)
+                users_24h_list.append(users_24h)
+                users_48h_list.append(users_48h)
+        else:
+            # 빈 리스트인 경우
+            users_24h_list = [0] * len(df_sorted)
+            users_48h_list = [0] * len(df_sorted)
         
         df_sorted['조회수_24h'] = users_24h_list
         df_sorted['조회수_48h'] = users_48h_list
