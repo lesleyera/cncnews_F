@@ -41,42 +41,45 @@ header[data-testid="stHeader"] {{ visibility: hidden !important; }}
 .stTabs [data-baseweb="tab"] {{ height: 60px; background-color: #f7f9fa; border-right: 1px solid #eceff1; color: #607d8b; font-weight: 700; font-size: 1.3rem; flex-grow: 1; text-align: center; }}
 .stTabs [aria-selected="true"] {{ background-color: #fff; color: {COLOR_RED}; border-bottom: 4px solid {COLOR_RED}; }}
 [data-testid="stDataFrame"] thead th {{ background-color: {COLOR_NAVY} !important; color: white !important; font-size: 1.2rem !important; font-weight: 600 !important; }}
-[data-testid="stDataFrame"] thead th {{ background-color: {COLOR_NAVY} !important; color: white !important; font-size: 1.2rem !important; font-weight: 600 !important; }}
 [data-testid="stDataFrame"] tbody td:nth-child(1),
 [data-testid="stDataFrame"] tbody td:nth-child(3),
 [data-testid="stDataFrame"] tbody td:nth-child(4),
 [data-testid="stDataFrame"] tbody td:nth-child(5),
 [data-testid="stDataFrame"] tbody td:nth-child(6),
 [data-testid="stDataFrame"] tbody td:nth-child(7) {{ text-align: right !important; }}
-/* 표 스크롤 완전 제거 */
+/* 표 스크롤 완전 제거 - Streamlit 공식 방법 */
 div[data-testid="stDataFrameContainer"] {{
-    max-height: none !important;
-    height: auto !important;
     overflow: visible !important;
 }}
 div[data-testid="stDataFrameContainer"] > div {{
-    max-height: none !important;
-    height: auto !important;
     overflow: visible !important;
+    max-height: none !important;
+}}
+div[data-testid="stDataFrameContainer"] > div > div {{
+    overflow: visible !important;
+    max-height: none !important;
 }}
 [data-testid="stDataFrame"] {{
-    max-height: none !important;
-    height: auto !important;
     overflow: visible !important;
+    max-height: none !important;
 }}
 [data-testid="stDataFrame"] > div {{
-    max-height: none !important;
-    height: auto !important;
     overflow: visible !important;
+    max-height: none !important;
 }}
 [data-testid="stDataFrame"] > div > div {{
-    max-height: none !important;
-    height: auto !important;
     overflow: visible !important;
+    max-height: none !important;
 }}
-[data-testid="stDataFrame"] table {{
-    display: table !important;
-    width: 100% !important;
+[data-testid="stDataFrame"] > div > div > div {{
+    overflow: visible !important;
+    max-height: none !important;
+}}
+/* 스크롤바 숨기기 */
+[data-testid="stDataFrame"]::-webkit-scrollbar {{
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }}
 .footer-note {{ font-size: 1rem; color: #78909c; margin-top: 50px; border-top: 1px solid #eceff1; padding-top: 15px; text-align: center; }}
 </style>

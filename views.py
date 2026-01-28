@@ -9,9 +9,6 @@ import re
 # 모듈 임포트
 import config
 from config import COLOR_NAVY, COLOR_RED, COLOR_GREY, CHART_PALETTE, COLOR_GENDER
-from utils import WEEK_MAP
-from datetime import datetime, timedelta
-import data
 
 # ----------------- 차트 생성 헬퍼 함수 -----------------
 def create_donut_chart_with_val(df, names, values, color_map=None, height=350, margin=None, rotation=90, show_legend=False, limit_labels=None):
@@ -152,7 +149,7 @@ def render_traffic(df_traffic_curr, df_traffic_last):
     
     df_m.sort_values('이번주 비중', ascending=False, inplace=True)
     
-    st.dataframe(df_m[['유입경로', '이번주 비중', '지난주 비중', '비중 변화']].copy().assign(**{'비중 변화': lambda x: x['비중 변화'].apply(lambda v: f"{v:+.1f}%p")}), use_container_width=True, hide_index=True)
+    st.dataframe(df_m[['유입경로', '이번주 비중', '지난주 비중', '비중 변화']].copy().assign(**{'비중 변화': lambda x: x['비중 변화'].apply(lambda v: f"{v:+.1f}%p")}), use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
     st.markdown("""
@@ -200,7 +197,7 @@ def render_demo_region(df_region_curr, df_region_last):
         df_disp['이번주(%)'] = df_disp['비율_이번'].astype(str) + '%'
         df_disp['지난주(%)'] = df_disp['비율_지난'].astype(str) + '%'
         df_disp['변화(%p)'] = df_disp['변화(%p)'].apply(lambda x: f"{x:+.1f}%p")
-        st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True)
+        st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
     st.markdown("""
@@ -251,7 +248,7 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
             df_disp['이번주(%)'] = df_disp['비율_이번'].astype(str) + '%'
             df_disp['지난주(%)'] = df_disp['비율_지난'].astype(str) + '%'
             df_disp['변화(%p)'] = df_disp['변화(%p)'].apply(lambda x: f"{x:+.1f}%p")
-            st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True)
+            st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True, height="content")
         st.markdown("<hr>", unsafe_allow_html=True)
     
     # 산식 각주
@@ -268,16 +265,12 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
 def render_top10_detail(df_top10):
     st.markdown('<div class="section-header-container"><div class="section-header">4. 최근 7일 조회수 TOP 10 기사 상세</div></div>', unsafe_allow_html=True)
     if not df_top10.empty:
-        from utils import clean_author_name
         df_p4 = df_top10.copy()
         def safe_format_int(x):
             try: return f"{int(float(x)):,}"
             except: return str(x)
         for c in ['전체조회수','전체방문자수','좋아요','댓글']: 
             df_p4[c] = df_p4[c].apply(safe_format_int)
-        # 작성자에서 직함 제거 (1어절만 남김)
-        if '작성자' in df_p4.columns:
-            df_p4['작성자'] = df_p4['작성자'].apply(clean_author_name)
         df_p4_display = df_p4.copy()
         df_p4_display = df_p4_display.rename(columns={
             '전체조회수': '최근 7일간 조회수',
@@ -286,7 +279,7 @@ def render_top10_detail(df_top10):
             '최다유입': '최다 유입경로'
         })
         cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','좋아요','댓글']
-        st.dataframe(df_p4_display[cols], use_container_width=True, hide_index=True)
+        st.dataframe(df_p4_display[cols], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
     st.markdown("""
@@ -305,17 +298,12 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     st.markdown('<div class="section-header-container"><div class="section-header">5. TOP 10 기사 유입경로(매체)별 조회수 분포</div></div>', unsafe_allow_html=True)
     
     if not df_top10.empty:
-        from utils import clean_author_name
         df_p5 = df_top10.copy()
         def safe_format_int_col(x):
             try:
                 val_str = str(x).replace(',', '')
                 return f"{int(float(val_str)):,}"
             except: return str(x)
-        
-        # 작성자에서 직함 제거 (1어절만 남김)
-        if '작성자' in df_p5.columns:
-            df_p5['작성자'] = df_p5['작성자'].apply(clean_author_name)
         
         df_p5['전체조회수_fmt'] = df_p5['전체조회수'].apply(safe_format_int_col)
         df_p5 = df_p5.rename(columns={'전체조회수_fmt': '지난 7일간 조회수'})
@@ -324,7 +312,7 @@ def render_top10_trends(df_top10, df_top10_sources=None):
         if '유입경로 1순위' not in df_p5.columns:
             df_p5['유입경로 1순위'] = "-"
             
-        st.dataframe(df_p5[cols], use_container_width=True, hide_index=True)
+        st.dataframe(df_p5[cols], use_container_width=True, hide_index=True, height="content")
         
         if df_top10_sources is not None and not df_top10_sources.empty:
             path_to_title = dict(zip(df_top10['경로'], df_top10['제목']))
@@ -373,176 +361,43 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     """, unsafe_allow_html=True)
 
 # ----------------- 6. 카테고리 -----------------
-def render_category(df_top10, selected_week):
+def render_category(df_top10):
     st.markdown('<div class="section-header-container"><div class="section-header">6. 카테고리별 분석</div></div>', unsafe_allow_html=True)
     if not df_top10.empty:
         df_real = df_top10
-        
-        # 전주 데이터 가져오기
-        dr = WEEK_MAP[selected_week]
-        s_dt = dr.split(' ~ ')[0].replace('.', '-')
-        e_dt = dr.split(' ~ ')[1].replace('.', '-')
-        ls_dt = (datetime.strptime(s_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
-        le_dt = (datetime.strptime(e_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
-        
-        # 전주 발행 기사 데이터 가져오기 (간단한 방법: GA4 데이터만 사용)
-        df_last_week_raw = data.run_ga4_report(ls_dt, le_dt, ["pagePath", "pageTitle"], ["screenPageViews"], limit=100000)
-        df_last_week = df_last_week_raw.copy() if not df_last_week_raw.empty else pd.DataFrame()
-        
         # 메인 카테고리
         cat_main = df_real.groupby('카테고리').agg(기사수=('제목','count'), 전체조회수=('전체조회수','sum')).reset_index()
         total_main = cat_main['기사수'].sum()
-        cat_main['기사수_num'] = cat_main['기사수']
-        
-        # 전주 메인 카테고리 데이터 (전주 발행 기사 크롤링 - 성능 고려하여 최소화)
-        # 전주 발행 기사 목록 페이지 크롤링
-        from data import crawl_article_list_page, crawl_single_article_cached
-        import concurrent.futures
-        
-        published_articles_last_week = []
-        for page_num in range(1, 6):  # 최대 5페이지만 확인 (성능 고려)
-            articles = crawl_article_list_page(page_num)
-            if not articles:
-                break
-            for article in articles:
-                pub_date_str = article.get('published_date', '-')
-                if pub_date_str == '-':
-                    continue
-                try:
-                    date_part = pub_date_str.split()[0] if ' ' in pub_date_str else pub_date_str
-                    if '.' in date_part:
-                        date_part = date_part.replace('.', '-')
-                    pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
-                    ls_dt_date = datetime.strptime(ls_dt, '%Y-%m-%d').date()
-                    le_dt_date = datetime.strptime(le_dt, '%Y-%m-%d').date()
-                    if ls_dt_date <= pub_date <= le_dt_date:
-                        published_articles_last_week.append(article)
-                    elif pub_date < ls_dt_date:
-                        break  # 더 오래된 기사는 중단
-                except:
-                    continue
-        
-        # 전주 발행 기사의 카테고리 정보 크롤링
-        cat_main_last_dict = {}
-        if published_articles_last_week:
-            last_week_paths = [a['path'] for a in published_articles_last_week[:50]]  # 최대 50개만 (성능 고려)
-            scraped_last_week = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(crawl_single_article_cached, path): path for path in last_week_paths}
-                for future in concurrent.futures.as_completed(futures):
-                    path = futures[future]
-                    try:
-                        result = future.result(timeout=3.0)
-                        scraped_last_week[path] = result
-                    except:
-                        scraped_last_week[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
-            
-            # 카테고리별 기사 수 집계
-            for path, result in scraped_last_week.items():
-                cat = result[3] if len(result) > 3 else "뉴스"
-                cat_main_last_dict[cat] = cat_main_last_dict.get(cat, 0) + 1
-        
-        # 전주 카테고리 데이터프레임 생성
-        cat_main_last = pd.DataFrame(columns=['카테고리', '기사수'])
-        for cat in cat_main['카테고리'].unique():
-            count = cat_main_last_dict.get(cat, 0)
-            cat_main_last = pd.concat([cat_main_last, pd.DataFrame({'카테고리': [cat], '기사수': [count]})], ignore_index=True)
-        
-        # 이번주/전주 비교 데이터 준비
-        cat_main_compare = cat_main[['카테고리', '기사수_num']].copy()
-        cat_main_compare = cat_main_compare.rename(columns={'기사수_num': '이번주'})
-        cat_main_compare = pd.merge(cat_main_compare, cat_main_last[['카테고리', '기사수']], on='카테고리', how='left', suffixes=('', '_last'))
-        cat_main_compare['전주'] = cat_main_compare['기사수'].fillna(0).astype(int)
-        cat_main_compare = cat_main_compare.drop(columns=['기사수'])
-        
-        # 막대그래프용 데이터 변환
-        cat_main_melted = cat_main_compare.melt(id_vars='카테고리', value_vars=['이번주', '전주'], var_name='구분', value_name='기사수')
-        
-        # 기사수 (비중%) 형태로 병합
+        # [수정] 기사수 (비중%) 형태로 병합
         cat_main['기사수'] = cat_main.apply(lambda x: f"{x['기사수']} ({x['기사수']/total_main*100:.1f}%)", axis=1)
+        
         cat_main['전체조회수'] = pd.to_numeric(cat_main['전체조회수'], errors='coerce').fillna(0)
+        cat_main['기사수_num'] = cat_main['기사수'].apply(lambda x: int(x.split('(')[0])) # 차트용 숫자 추출
         
         # [수정] 컬럼명 변경: 기사1건당평균 -> 평균조회수
         cat_main['평균조회수'] = (cat_main['전체조회수'] / cat_main['기사수_num']).astype(int).map('{:,}'.format)
         cat_main['전체조회수'] = cat_main['전체조회수'].map('{:,}'.format)
         
-        st.markdown('<div class="chart-header">메인 카테고리별 기사 수</div>', unsafe_allow_html=True)
-        # 이번주/전주 비교 막대그래프
-        max_value = max(cat_main_compare['이번주'].max(), cat_main_compare['전주'].max()) if not cat_main_compare.empty else 0
-        fig_main = px.bar(cat_main_melted, x='카테고리', y='기사수', color='구분', barmode='group', 
-                          color_discrete_map={'이번주': COLOR_NAVY, '전주': COLOR_GREY},
-                          text='기사수')
-        fig_main.update_traces(texttemplate='%{text}', textposition='outside')
-        fig_main.update_layout(showlegend=True, plot_bgcolor='white', yaxis_title="기사수", 
-                              yaxis=dict(range=[0, max_value * 1.2] if max_value > 0 else [0, 10]),
-                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig_main, use_container_width=True, key="category_main_chart")
-        st.dataframe(cat_main[['카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True)
+        st.markdown('<div class="chart-header">1. 메인 카테고리별 기사 수</div>', unsafe_allow_html=True)
+        st.plotly_chart(px.bar(cat_main, x='카테고리', y='기사수_num', text_auto=True, color='카테고리', color_discrete_sequence=CHART_PALETTE).update_layout(showlegend=False, plot_bgcolor='white', yaxis_title="기사수"), use_container_width=True, key="category_main_chart")
+        st.dataframe(cat_main[['카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True, height="content")
 
         # 세부 카테고리
-        st.markdown('<div class="chart-header">세부 카테고리별 기사 수</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-header">2. 세부 카테고리별 기사 수</div>', unsafe_allow_html=True)
         cat_sub = df_real.groupby(['카테고리', '세부카테고리']).agg(기사수=('제목','count'), 전체조회수=('전체조회수','sum')).reset_index()
         total_sub = cat_sub['기사수'].sum()
-        cat_sub['기사수_num'] = cat_sub['기사수']
-        
-        # 전주 세부 카테고리 데이터
-        cat_sub_last_dict = {}
-        if published_articles_last_week:
-            for path, result in scraped_last_week.items():
-                cat = result[3] if len(result) > 3 else "뉴스"
-                subcat = result[4] if len(result) > 4 else "이슈"
-                key = (cat, subcat)
-                cat_sub_last_dict[key] = cat_sub_last_dict.get(key, 0) + 1
-        
-        cat_sub_last = pd.DataFrame(columns=['카테고리', '세부카테고리', '기사수'])
-        for (cat, subcat), count in cat_sub_last_dict.items():
-            cat_sub_last = pd.concat([cat_sub_last, pd.DataFrame({
-                '카테고리': [cat], 
-                '세부카테고리': [subcat], 
-                '기사수': [count]
-            })], ignore_index=True)
-        
-        # 이번주 카테고리에 없는 전주 카테고리도 추가 (0으로)
-        for _, row in cat_sub.iterrows():
-            key = (row['카테고리'], row['세부카테고리'])
-            if key not in cat_sub_last_dict:
-                cat_sub_last = pd.concat([cat_sub_last, pd.DataFrame({
-                    '카테고리': [row['카테고리']], 
-                    '세부카테고리': [row['세부카테고리']], 
-                    '기사수': [0]
-                })], ignore_index=True)
-        
-        # 이번주/전주 비교 데이터 준비
-        cat_sub_compare = cat_sub[['카테고리', '세부카테고리', '기사수_num']].copy()
-        cat_sub_compare = cat_sub_compare.rename(columns={'기사수_num': '이번주'})
-        cat_sub_compare = pd.merge(cat_sub_compare, cat_sub_last[['카테고리', '세부카테고리', '기사수']], 
-                                   on=['카테고리', '세부카테고리'], how='left', suffixes=('', '_last'))
-        cat_sub_compare['전주'] = cat_sub_compare['기사수'].fillna(0).astype(int)
-        cat_sub_compare = cat_sub_compare.drop(columns=['기사수'])
-        
-        # 막대그래프용 데이터 변환
-        cat_sub_melted = cat_sub_compare.melt(id_vars=['카테고리', '세부카테고리'], value_vars=['이번주', '전주'], 
-                                              var_name='구분', value_name='기사수')
-        
         # [수정] 기사수 (비중%) 형태로 병합
         cat_sub['기사수'] = cat_sub.apply(lambda x: f"{x['기사수']} ({x['기사수']/total_sub*100:.1f}%)", axis=1)
+        
         cat_sub['전체조회수'] = pd.to_numeric(cat_sub['전체조회수'], errors='coerce').fillna(0)
+        cat_sub['기사수_num'] = cat_sub['기사수'].apply(lambda x: int(x.split('(')[0]))
         
         # [수정] 컬럼명 변경: 기사1건당평균 -> 평균조회수
         cat_sub['평균조회수'] = (cat_sub['전체조회수'] / cat_sub['기사수_num']).astype(int).map('{:,}'.format)
         cat_sub['전체조회수'] = cat_sub['전체조회수'].map('{:,}'.format)
         
-        # 이번주/전주 비교 막대그래프
-        max_value_sub = max(cat_sub_compare['이번주'].max(), cat_sub_compare['전주'].max()) if not cat_sub_compare.empty else 0
-        fig_sub = px.bar(cat_sub_melted, x='세부카테고리', y='기사수', color='구분', barmode='group',
-                        color_discrete_map={'이번주': COLOR_NAVY, '전주': COLOR_GREY},
-                        text='기사수')
-        fig_sub.update_traces(texttemplate='%{text}', textposition='outside')
-        fig_sub.update_layout(plot_bgcolor='white', yaxis_title="기사수",
-                             yaxis=dict(range=[0, max_value_sub * 1.2] if max_value_sub > 0 else [0, 10]),
-                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig_sub, use_container_width=True, key="category_sub_chart")
-        st.dataframe(cat_sub[['카테고리', '세부카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True)
+        st.plotly_chart(px.bar(cat_sub, x='세부카테고리', y='기사수_num', text_auto=True, color='카테고리', color_discrete_sequence=CHART_PALETTE).update_layout(plot_bgcolor='white', yaxis_title="기사수"), use_container_width=True, key="category_sub_chart")
+        st.dataframe(cat_sub[['카테고리', '세부카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
     st.markdown("""
@@ -556,136 +411,31 @@ def render_category(df_top10, selected_week):
     """, unsafe_allow_html=True)
 
 # ----------------- 7. 기자 (통합) -----------------
-def render_writer_integrated(writers_df, df_all_articles_with_metadata):
+def render_writer_integrated(writers_df):
     st.markdown('<div class="section-header-container"><div class="section-header">7. 이번주 기자별 분석</div></div>', unsafe_allow_html=True)
     
-    if not df_all_articles_with_metadata.empty and '작성자' in df_all_articles_with_metadata.columns:
-        # 본명 기준: 본명별 합산
-        from data import AUTHOR_MAPPING_DATA
-        pen_to_real_map = {item['필명']: item['본명'] for item in AUTHOR_MAPPING_DATA}
-        
-        df_work = df_all_articles_with_metadata.copy()
-        # 작성자 이름에서 직함 제거 (한 번 더 정리)
-        from utils import clean_author_name
-        df_work['작성자'] = df_work['작성자'].apply(clean_author_name)
-        df_work['본명'] = df_work['작성자'].map(pen_to_real_map).fillna(df_work['작성자'])
-        
-        # 본명 기준 집계
-        writers_by_real = df_work.groupby('본명').agg(
-            기사수=('제목','count'), 
-            총조회수=('전체조회수','sum'),
-            좋아요=('좋아요', 'sum'),
-            댓글=('댓글', 'sum')
-        ).reset_index()
-        writers_by_real = writers_by_real.sort_values('총조회수', ascending=False)
-        writers_by_real['순위'] = range(1, len(writers_by_real)+1)
-        writers_by_real['평균조회수'] = (writers_by_real['총조회수']/writers_by_real['기사수']).astype(int)
-        
-        # 비율 계산 (각 지표 중에서의 점유율)
-        total_views = writers_by_real['총조회수'].sum()
-        total_avg_views = writers_by_real['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
-        
+    if not writers_df.empty:
+        # 본명 기준 표
         st.markdown('<div class="sub-header">본명 기준</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
-        
-        disp_w = writers_by_real.copy()
-        # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
-        disp_w['총조회수_비율'] = (disp_w['총조회수'] / total_views * 100).round(1) if total_views > 0 else 0
-        disp_w['평균조회수_비율'] = (disp_w['평균조회수'] / total_avg_views * 100).round(1) if total_avg_views > 0 else 0
-        
-        # 포맷팅: 숫자 + 비율
-        disp_w['총조회수_포맷'] = disp_w.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
-        disp_w['평균조회수_포맷'] = disp_w.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
-        disp_w['좋아요_포맷'] = disp_w['좋아요'].apply(lambda x: f"{x:,}")
-        disp_w['댓글_포맷'] = disp_w['댓글'].apply(lambda x: f"{x:,}")
-        
-        # 본명에서 직함 제거 (1어절만 남김)
-        disp_w['본명'] = disp_w['본명'].apply(clean_author_name)
-        
-        disp_w = disp_w[['순위', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
-        disp_w.columns = ['순위', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']
-        
-        # 스타일링: 숫자 컬럼 오른쪽 정렬
-        st.dataframe(
-            disp_w, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "순위": st.column_config.NumberColumn("순위", format="%d"),
-                "본명": st.column_config.TextColumn("본명"),
-                "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
-                "전체 조회수": st.column_config.TextColumn("전체 조회수"),
-                "기사 1건 당 평균 조회수": st.column_config.TextColumn("기사 1건 당 평균 조회수"),
-                "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
-                "댓글 개수": st.column_config.TextColumn("댓글 개수")
-            }
-        )
+        disp_w = writers_df.copy()
+        for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
+        disp_w = disp_w[['순위', '작성자', '필명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
+        disp_w.columns = ['순위', '본명', '필명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
+        st.dataframe(disp_w, use_container_width=True, hide_index=True, height="content")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 필명 기준: 필명별 합산 (모든 필명 포함)
-        df_work_pen = df_all_articles_with_metadata.copy()
-        # 작성자 이름에서 직함 제거 (한 번 더 정리)
-        df_work_pen['작성자'] = df_work_pen['작성자'].apply(clean_author_name)
-        df_work_pen['본명_mapped'] = df_work_pen['작성자'].map(pen_to_real_map)
-        # 필명 기준은 모든 작성자(필명)를 포함 (본명과 같은 경우도 포함)
-        # 단, 매핑이 없는 경우는 본명으로 사용
-        df_work_pen['본명'] = df_work_pen['본명_mapped'].fillna(df_work_pen['작성자'])
-        
-        if not df_work_pen.empty:
-            writers_by_pen = df_work_pen.groupby('작성자').agg(
-                기사수=('제목','count'), 
-                총조회수=('전체조회수','sum'),
-                좋아요=('좋아요', 'sum'),
-                댓글=('댓글', 'sum')
-            ).reset_index()
-            writers_by_pen = writers_by_pen.rename(columns={'작성자': '필명'})
-            # 본명 매핑 (매핑이 없으면 필명 그대로)
-            writers_by_pen['본명'] = writers_by_pen['필명'].map(pen_to_real_map).fillna(writers_by_pen['필명'])
-            writers_by_pen = writers_by_pen.sort_values('총조회수', ascending=False)
-            writers_by_pen['순위'] = range(1, len(writers_by_pen)+1)
-            writers_by_pen['평균조회수'] = (writers_by_pen['총조회수']/writers_by_pen['기사수']).astype(int)
-            
-            # 비율 계산 (각 지표 중에서의 점유율)
-            total_views_pen = writers_by_pen['총조회수'].sum()
-            total_avg_views_pen = writers_by_pen['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
-            
-            st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
-            st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
-            
-            disp_w_pen = writers_by_pen.copy()
-            # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
-            disp_w_pen['총조회수_비율'] = (disp_w_pen['총조회수'] / total_views_pen * 100).round(1) if total_views_pen > 0 else 0
-            disp_w_pen['평균조회수_비율'] = (disp_w_pen['평균조회수'] / total_avg_views_pen * 100).round(1) if total_avg_views_pen > 0 else 0
-            
-            # 포맷팅: 숫자 + 비율
-            disp_w_pen['총조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
-            disp_w_pen['평균조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
-            disp_w_pen['좋아요_포맷'] = disp_w_pen['좋아요'].apply(lambda x: f"{x:,}")
-            disp_w_pen['댓글_포맷'] = disp_w_pen['댓글'].apply(lambda x: f"{x:,}")
-            
-            # 본명에서 직함 제거 (1어절만 남김)
-            disp_w_pen['본명'] = disp_w_pen['본명'].apply(clean_author_name)
-            disp_w_pen['필명'] = disp_w_pen['필명'].apply(clean_author_name)
-            
-            disp_w_pen = disp_w_pen[['순위', '필명', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
-            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회수', '기사 1건 당 평균 조회수', '좋아요 개수', '댓글 개수']
-            
-            st.dataframe(
-                disp_w_pen, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "순위": st.column_config.NumberColumn("순위", format="%d"),
-                    "필명": st.column_config.TextColumn("필명"),
-                    "본명": st.column_config.TextColumn("본명"),
-                    "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
-                    "전체 조회수": st.column_config.TextColumn("전체 조회수"),
-                    "기사 1건 당 평균 조회수": st.column_config.TextColumn("기사 1건 당 평균 조회수"),
-                    "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
-                    "댓글 개수": st.column_config.TextColumn("댓글 개수")
-                }
-            )
+        # 필명 기준 표
+        st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
+        df_pen = writers_df[writers_df['필명'] != ''].copy()
+        if not df_pen.empty:
+            df_pen['순위'] = df_pen['총조회수'].rank(method='min', ascending=False).astype(int)
+            df_pen = df_pen.sort_values('순위')
+            disp_w_pen = df_pen.copy()
+            for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w_pen[c] = disp_w_pen[c].apply(lambda x: f"{x:,}")
+            disp_w_pen = disp_w_pen[['순위', '필명', '작성자', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
+            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
+            st.dataframe(disp_w_pen, use_container_width=True, hide_index=True, height="content")
         else: 
             st.info("필명 기자 실적 없음")
     
@@ -694,8 +444,8 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
     <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
     <strong>산식:</strong><br>
     • 발행기사 수: 기자별 기사 수 합계<br>
-    • 전체 조회수: 기자별 기사 조회수 합계 (전체 대비 비율 %)<br>
-    • 기사 1건 당 평균 조회수: 총조회수 ÷ 발행기사 수 (평균 대비 비율 %)<br>
+    • 전체 조회 수: 기자별 기사 조회수 합계<br>
+    • 기사 1건 당 평균 조회 수: 총조회수 ÷ 발행기사 수<br>
     • 순위: 총조회수 기준 내림차순 정렬
     </div>
     """, unsafe_allow_html=True)
@@ -708,7 +458,7 @@ def render_writer_real(writers_df):
         for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
         disp_w = disp_w[['순위', '작성자', '필명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
         disp_w.columns = ['순위', '본명', '필명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-        st.dataframe(disp_w, use_container_width=True, hide_index=True)
+        st.dataframe(disp_w, use_container_width=True, hide_index=True, height="content")
 
 # ----------------- 8. 기자 (필명) - 하위 호환성 유지 -----------------
 def render_writer_pen(writers_df):
@@ -722,5 +472,5 @@ def render_writer_pen(writers_df):
             for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
             disp_w = disp_w[['순위', '필명', '작성자', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
             disp_w.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-            st.dataframe(disp_w, use_container_width=True, hide_index=True)
+            st.dataframe(disp_w, use_container_width=True, hide_index=True, height="content")
         else: st.info("필명 기자 실적 없음")
