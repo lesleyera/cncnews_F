@@ -7,25 +7,33 @@ def clean_author_name(name):
     if not name: return "미상"
     
     # 기본 정리
-    name = name.replace('#', '').replace('전문기자', '').replace('기자', '').strip()
+    name = str(name).replace('#', '').replace('전문기자', '').replace('기자', '').strip()
     
-    # 공백으로 분리하여 단어별로 처리
+    # 직함 목록
+    titles = ['편집인', '전문', '편집', '기자']
+    
+    # 1단계: 공백으로 분리하여 단어별로 처리
     words = name.split()
-    if len(words) >= 2:
-        # 첫 번째 단어가 직함인 경우 제거 (편집인, 전문 등)
-        if words[0] in ['편집인', '전문', '기자', '편집']:
-            words = words[1:]
-        # 마지막 단어가 직함인 경우 제거
-        elif words[-1] in ['편집인', '전문', '기자', '편집']:
-            words = words[:-1]
+    filtered_words = []
+    for word in words:
+        # 단어가 직함이 아니면 추가
+        if word not in titles:
+            filtered_words.append(word)
     
     # 단어들을 다시 합치기
-    name = ' '.join(words) if words else name
+    name = ' '.join(filtered_words) if filtered_words else name
     
-    # 공백 없이 붙어있는 직함 제거 (예: "김성민편집인" -> "김성민")
-    name = name.replace('편집인', '').replace('전문', '').replace('편집', '').strip()
+    # 2단계: 공백 없이 붙어있는 직함 제거 (정규표현식 사용)
+    for title in titles:
+        # "이름직함" 패턴 제거
+        name = re.sub(rf'{re.escape(title)}', '', name)
+        # "이름 직함" 패턴 제거 (공백 포함)
+        name = re.sub(rf'\s*{re.escape(title)}\s*', ' ', name)
     
-    return ' '.join(name.split()) if name else "미상"
+    # 3단계: 정리 (여러 공백을 하나로, 앞뒤 공백 제거)
+    name = ' '.join(name.split()).strip()
+    
+    return name if name else "미상"
 
 def get_sunday_to_saturday_ranges(count=12):
     """최근 주차(일~토) 계산"""

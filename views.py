@@ -556,6 +556,9 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         pen_to_real_map = {item['필명']: item['본명'] for item in AUTHOR_MAPPING_DATA}
         
         df_work = df_all_articles_with_metadata.copy()
+        # 작성자 이름에서 직함 제거 (한 번 더 정리)
+        from utils import clean_author_name
+        df_work['작성자'] = df_work['작성자'].apply(clean_author_name)
         df_work['본명'] = df_work['작성자'].map(pen_to_real_map).fillna(df_work['작성자'])
         
         # 본명 기준 집계
@@ -610,6 +613,8 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         
         # 필명 기준: 필명별 합산 (모든 필명 포함)
         df_work_pen = df_all_articles_with_metadata.copy()
+        # 작성자 이름에서 직함 제거 (한 번 더 정리)
+        df_work_pen['작성자'] = df_work_pen['작성자'].apply(clean_author_name)
         df_work_pen['본명_mapped'] = df_work_pen['작성자'].map(pen_to_real_map)
         # 필명 기준은 모든 작성자(필명)를 포함 (본명과 같은 경우도 포함)
         # 단, 매핑이 없는 경우는 본명으로 사용
