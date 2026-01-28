@@ -270,11 +270,20 @@ def crawl_single_article_cached(url_path):
 
 @st.cache_data(ttl=3600, show_spinner="데이터 불러오는 중...")
 def load_all_dashboard_data(selected_week):
-    dr = WEEK_MAP[selected_week]
-    s_dt = dr.split(' ~ ')[0].replace('.', '-')
-    e_dt = dr.split(' ~ ')[1].replace('.', '-')
-    ls_dt = (datetime.strptime(s_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
-    le_dt = (datetime.strptime(e_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
+    try:
+        dr = WEEK_MAP[selected_week]
+        s_dt = dr.split(' ~ ')[0].replace('.', '-')
+        e_dt = dr.split(' ~ ')[1].replace('.', '-')
+        ls_dt = (datetime.strptime(s_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
+        le_dt = (datetime.strptime(e_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
+    except (KeyError, ValueError, IndexError) as e:
+        # 기본값 반환
+        return (0, 0, pd.DataFrame(columns=['날짜', 'UV', 'PV']), pd.DataFrame(columns=['주차', 'UV', 'PV']),
+                pd.DataFrame(columns=['유입경로', '조회수']), pd.DataFrame(columns=['유입경로', '조회수']),
+                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
+                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
+                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
+                pd.DataFrame(), pd.DataFrame(), 0, 0, 0, pd.DataFrame(), 0, pd.DataFrame())
 
     # 1. KPI
     summary = run_ga4_report(s_dt, e_dt, [], ["activeUsers", "screenPageViews", "newUsers"])
@@ -299,6 +308,8 @@ def load_all_dashboard_data(selected_week):
         df_daily = df_daily[df_daily['날짜_원본'].dt.date <= actual_end_date]
         df_daily['날짜'] = df_daily['날짜_원본'].dt.strftime('%m-%d')
         df_daily = df_daily.drop(columns=['날짜_원본'])
+    else:
+        df_daily = pd.DataFrame(columns=['날짜', 'UV', 'PV'])
     
     # 3. 3개월 추이
     def fetch_week_data(week_label, date_str):
@@ -335,6 +346,8 @@ def load_all_dashboard_data(selected_week):
         
         df_weekly['sort_key'] = df_weekly.apply(sort_key, axis=1)
         df_weekly = df_weekly.sort_values('sort_key').drop(columns=['sort_key'])
+    else:
+        df_weekly = pd.DataFrame(columns=['주차', 'UV', 'PV'])
     
     active_article_count = 0 
 
@@ -431,6 +444,8 @@ def load_all_dashboard_data(selected_week):
     df_raw_top = run_ga4_report(s_dt, e_dt, ["pageTitle", "pagePath"], ["screenPageViews", "activeUsers", "newUsers", "userEngagementDuration", "bounceRate"], "screenPageViews", limit=100)
     
     df_top10_sources = pd.DataFrame()
+    df_sources_raw = pd.DataFrame()  # 초기화 추가
+    best_source_map = {}  # 초기화 추가
 
     if not df_raw_top.empty:
         def is_excluded(row):
@@ -537,7 +552,7 @@ def load_all_dashboard_data(selected_week):
         else: df_top10['신규방문자비율'] = f"{new_visitor_ratio}%"
         
         # [테이블용] 유입경로 1순위 컬럼 추가
-        if not df_sources_raw.empty:
+        if not df_sources_raw.empty and best_source_map:
             df_top10['유입경로 1순위'] = df_top10['경로'].map(best_source_map).fillna("-")
         else:
             df_top10['유입경로 1순위'] = "-"
