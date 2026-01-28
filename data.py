@@ -1,4 +1,5 @@
 # data.py
+import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
@@ -88,6 +89,7 @@ def run_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=No
         return pd.DataFrame(data)
     except: return pd.DataFrame(columns=dimensions + metrics)
 
+@st.cache_data(ttl=86400)
 def crawl_single_article_cached(url_path):
     """크롤링: 헤더 추가, 인코딩 보정, 하이브리드 파싱(DOM+텍스트패턴)"""
     full_url = f"http://www.cooknchefnews.com{url_path}"
@@ -201,6 +203,7 @@ def crawl_single_article_cached(url_path):
     except: 
         return ("관리자", 0, 0, "뉴스", "이슈", "-")
 
+@st.cache_data(ttl=3600, show_spinner="데이터 불러오는 중...")
 def load_all_dashboard_data(selected_week):
     dr = WEEK_MAP[selected_week]
     s_dt = dr.split(' ~ ')[0].replace('.', '-')
