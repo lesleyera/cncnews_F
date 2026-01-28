@@ -509,7 +509,7 @@ def load_all_dashboard_data(selected_week):
         df_sorted['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_sorted)
         df_sorted['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_sorted)
         
-        # 6-4. 24시간, 48시간 조회수 데이터 수집 (발행일시 기준 누적)
+        # 6-4. 24시간, 48시간 방문자수 데이터 수집 (발행일시 기준 누적)
         def parse_publish_date(reg_date_str):
             """발행일시 문자열을 datetime 객체로 변환"""
             if reg_date_str == "-" or not reg_date_str:
@@ -526,25 +526,34 @@ def load_all_dashboard_data(selected_week):
                     return datetime.strptime(f"{date_part} {time_part}", '%Y-%m-%d %H:%M')
                 else:
                     return datetime.strptime(date_part, '%Y-%m-%d')
-            except:
+            except Exception as e:
                 return None
         
-        # 각 기사별로 24시간, 48시간 조회수 계산 (발행일시 기준 누적)
-        views_24h_list = []
-        views_48h_list = []
+        # 각 기사별로 24시간, 48시간 방문자수 계산 (발행일시 기준 누적)
+        users_24h_list = []
+        users_48h_list = []
         
         # 병렬 처리로 성능 개선
-        def fetch_views_for_article(row_data):
-            """기사별 24시간, 48시간 조회수 계산"""
+        def fetch_users_for_article(row_data):
+            """기사별 24시간, 48시간 방문자수 계산"""
             page_path, reg_date_str = row_data
             publish_date = parse_publish_date(reg_date_str)
             
             if not publish_date:
                 return 0, 0
             
+            # 현재 시간 확인 (미래 날짜는 처리하지 않음)
+            now = datetime.now()
+            if publish_date > now:
+                return 0, 0
+            
             # 발행일시 + 24시간, 48시간 후 날짜 계산
             end_date_24h = publish_date + timedelta(hours=24)
             end_date_48h = publish_date + timedelta(hours=48)
+            
+            # 현재 시간을 넘지 않도록 제한
+            end_date_24h = min(end_date_24h, now)
+            end_date_48h = min(end_date_48h, now)
             
             start_date_str = publish_date.strftime('%Y-%m-%d')
             end_date_24h_str = end_date_24h.strftime('%Y-%m-%d')
@@ -564,36 +573,50 @@ def load_all_dashboard_data(selected_week):
                 )
             )
             
-            views_24h = 0
-            views_48h = 0
+            users_24h = 0
+            users_48h = 0
             
             try:
-                df_24h = run_ga4_report(start_date_str, end_date_24h_str, ["pagePath"], ["screenPageViews"], limit=1, dimension_filter=filter_24h)
-                if not df_24h.empty and len(df_24h) > 0:
-                    views_24h = int(df_24h['screenPageViews'].iloc[0])
-            except:
-                views_24h = 0
+                # activeUsers (방문자수)로 변경
+                df_24h = run_ga4_report(start_date_str, end_date_24h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_24h)
+                if not df_24h.empty:
+                    # pagePath가 일치하는 행 찾기
+                    matching_row = df_24h[df_24h['pagePath'].str.lower() == page_path.lower()]
+                    if not matching_row.empty:
+                        users_24h = int(matching_row['activeUsers'].iloc[0])
+                    elif len(df_24h) > 0:
+                        # 정확히 일치하지 않으면 첫 번째 행 사용 (필터가 작동했다면)
+                        users_24h = int(df_24h['activeUsers'].iloc[0])
+            except Exception as e:
+                users_24h = 0
             
             try:
-                df_48h = run_ga4_report(start_date_str, end_date_48h_str, ["pagePath"], ["screenPageViews"], limit=1, dimension_filter=filter_48h)
-                if not df_48h.empty and len(df_48h) > 0:
-                    views_48h = int(df_48h['screenPageViews'].iloc[0])
-            except:
-                views_48h = 0
+                # activeUsers (방문자수)로 변경
+                df_48h = run_ga4_report(start_date_str, end_date_48h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_48h)
+                if not df_48h.empty:
+                    # pagePath가 일치하는 행 찾기
+                    matching_row = df_48h[df_48h['pagePath'].str.lower() == page_path.lower()]
+                    if not matching_row.empty:
+                        users_48h = int(matching_row['activeUsers'].iloc[0])
+                    elif len(df_48h) > 0:
+                        # 정확히 일치하지 않으면 첫 번째 행 사용 (필터가 작동했다면)
+                        users_48h = int(df_48h['activeUsers'].iloc[0])
+            except Exception as e:
+                users_48h = 0
             
-            return views_24h, views_48h
+            return users_24h, users_48h
         
-        # 병렬 처리로 각 기사별 조회수 계산
+        # 병렬 처리로 각 기사별 방문자수 계산
         article_data = [(row['pagePath'], row['실발행일시']) for idx, row in df_sorted.iterrows()]
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            results = list(executor.map(fetch_views_for_article, article_data))
+            results = list(executor.map(fetch_users_for_article, article_data))
         
-        views_24h_list = [r[0] for r in results]
-        views_48h_list = [r[1] for r in results]
+        users_24h_list = [r[0] for r in results]
+        users_48h_list = [r[1] for r in results]
         
-        df_sorted['조회수_24h'] = views_24h_list
-        df_sorted['조회수_48h'] = views_48h_list
+        df_sorted['조회수_24h'] = users_24h_list
+        df_sorted['조회수_48h'] = users_48h_list
         
         def is_excluded_author(row):
             a = str(row['작성자']).lower().replace(' ', '')
