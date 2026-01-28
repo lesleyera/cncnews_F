@@ -270,6 +270,27 @@ def crawl_single_article_cached(url_path):
 
 @st.cache_data(ttl=3600, show_spinner="데이터 불러오는 중...")
 def load_all_dashboard_data(selected_week):
+    # 모든 반환 변수를 함수 시작 부분에서 초기화
+    sel_uv, sel_pv = 0, 0
+    df_daily = pd.DataFrame(columns=['날짜', 'UV', 'PV'])
+    df_weekly = pd.DataFrame(columns=['주차', 'UV', 'PV'])
+    df_traffic_curr = pd.DataFrame(columns=['유입경로', '조회수'])
+    df_traffic_last = pd.DataFrame(columns=['유입경로', '조회수'])
+    df_region_curr = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_region_last = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_age_curr = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_age_last = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_gender_curr = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_gender_last = pd.DataFrame(columns=['구분', 'activeUsers'])
+    df_top10 = pd.DataFrame()
+    df_raw_all = pd.DataFrame()
+    new_visitor_ratio = 0
+    search_inflow_ratio = 0
+    active_article_count = 0
+    df_top10_sources = pd.DataFrame()
+    published_article_count = 0
+    df_all_articles_with_metadata = pd.DataFrame()
+    
     try:
         dr = WEEK_MAP[selected_week]
         s_dt = dr.split(' ~ ')[0].replace('.', '-')
@@ -277,15 +298,13 @@ def load_all_dashboard_data(selected_week):
         ls_dt = (datetime.strptime(s_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
         le_dt = (datetime.strptime(e_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
     except (KeyError, ValueError, IndexError) as e:
-        # 기본값 반환
-        return (0, 0, pd.DataFrame(columns=['날짜', 'UV', 'PV']), pd.DataFrame(columns=['주차', 'UV', 'PV']),
-                pd.DataFrame(columns=['유입경로', '조회수']), pd.DataFrame(columns=['유입경로', '조회수']),
-                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
-                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
-                pd.DataFrame(columns=['구분', 'activeUsers']), pd.DataFrame(columns=['구분', 'activeUsers']),
-                pd.DataFrame(), pd.DataFrame(), 0, 0, 0, pd.DataFrame(), 0, pd.DataFrame())
+        # 기본값 반환 (이미 초기화됨)
+        return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
+                df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
+                df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata)
 
-    # 1. KPI
+    try:
+        # 1. KPI
     summary = run_ga4_report(s_dt, e_dt, [], ["activeUsers", "screenPageViews", "newUsers"])
     if not summary.empty:
         sel_uv = int(summary['activeUsers'].iloc[0])
@@ -361,17 +380,24 @@ def load_all_dashboard_data(selected_week):
         if 'google' in s: return '구글'
         return '기타'
     df_t_raw = run_ga4_report(s_dt, e_dt, ["sessionSource"], ["screenPageViews"])
-    df_t_raw['유입경로'] = df_t_raw['sessionSource'].apply(map_source)
-    df_traffic_curr = df_t_raw.groupby('유입경로')['screenPageViews'].sum().reset_index().rename(columns={'screenPageViews':'조회수'})
-    
-    search_engines = ['네이버', '구글', '다음']
-    search_pv = df_traffic_curr[df_traffic_curr['유입경로'].isin(search_engines)]['조회수'].sum()
-    total_pv_traffic = df_traffic_curr['조회수'].sum()
-    search_inflow_ratio = round((search_pv / total_pv_traffic * 100), 1) if total_pv_traffic > 0 else 0
+    if not df_t_raw.empty:
+        df_t_raw['유입경로'] = df_t_raw['sessionSource'].apply(map_source)
+        df_traffic_curr = df_t_raw.groupby('유입경로')['screenPageViews'].sum().reset_index().rename(columns={'screenPageViews':'조회수'})
+        
+        search_engines = ['네이버', '구글', '다음']
+        search_pv = df_traffic_curr[df_traffic_curr['유입경로'].isin(search_engines)]['조회수'].sum()
+        total_pv_traffic = df_traffic_curr['조회수'].sum()
+        search_inflow_ratio = round((search_pv / total_pv_traffic * 100), 1) if total_pv_traffic > 0 else 0
+    else:
+        df_traffic_curr = pd.DataFrame(columns=['유입경로', '조회수'])
+        search_inflow_ratio = 0
     
     df_tl_raw = run_ga4_report(ls_dt, le_dt, ["sessionSource"], ["screenPageViews"])
-    df_tl_raw['유입경로'] = df_tl_raw['sessionSource'].apply(map_source)
-    df_traffic_last = df_tl_raw.groupby('유입경로')['screenPageViews'].sum().reset_index().rename(columns={'screenPageViews':'조회수'})
+    if not df_tl_raw.empty:
+        df_tl_raw['유입경로'] = df_tl_raw['sessionSource'].apply(map_source)
+        df_traffic_last = df_tl_raw.groupby('유입경로')['screenPageViews'].sum().reset_index().rename(columns={'screenPageViews':'조회수'})
+    else:
+        df_traffic_last = pd.DataFrame(columns=['유입경로', '조회수'])
 
     # 5. 방문자 특성
     def clean_and_group(df, col_name):
@@ -713,6 +739,9 @@ def load_all_dashboard_data(selected_week):
                 df_all_articles_with_metadata = pd.DataFrame()
         else:
             df_all_articles_with_metadata = pd.DataFrame()
+    except Exception as e:
+        # 예외 발생 시에도 초기화된 기본값 반환
+        pass
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
