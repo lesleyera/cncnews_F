@@ -501,13 +501,49 @@ def load_all_dashboard_data(selected_week):
         scraped_data = [scraped_data_dict[i] for i in range(len(paths))]
         auths, lks, cmts, cats, subcats, reg_dates = zip(*scraped_data) if scraped_data else ([], [], [], [], [], [])
         
-        # 6-3. 데이터 병합 및 정리
+        # 6-3. 24시간, 48시간 조회수 데이터 수집
+        now = datetime.now()
+        today = now.strftime('%Y-%m-%d')
+        yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # 24시간 조회수: 오늘 날짜 (00:00~23:59)
+        # 48시간 조회수: 어제 날짜 (00:00~23:59)
+        views_24h_dict = {}
+        views_48h_dict = {}
+        
+        if paths:
+            # 24시간 조회수 (오늘)
+            filter_24h = FilterExpression(
+                filter=Filter(
+                    field_name="pagePath",
+                    in_list_filter=Filter.InListFilter(values=paths, case_sensitive=False)
+                )
+            )
+            df_24h = run_ga4_report(today, today, ["pagePath"], ["screenPageViews"], limit=100, dimension_filter=filter_24h)
+            if not df_24h.empty:
+                views_24h_dict = dict(zip(df_24h['pagePath'], df_24h['screenPageViews'].astype(int)))
+            
+            # 48시간 조회수 (어제)
+            filter_48h = FilterExpression(
+                filter=Filter(
+                    field_name="pagePath",
+                    in_list_filter=Filter.InListFilter(values=paths, case_sensitive=False)
+                )
+            )
+            df_48h = run_ga4_report(yesterday, yesterday, ["pagePath"], ["screenPageViews"], limit=100, dimension_filter=filter_48h)
+            if not df_48h.empty:
+                views_48h_dict = dict(zip(df_48h['pagePath'], df_48h['screenPageViews'].astype(int)))
+        
+        # 6-4. 데이터 병합 및 정리
         df_sorted['작성자'] = list(auths) if auths else ["관리자"] * len(df_sorted)
         df_sorted['좋아요'] = list(lks) if lks else [0] * len(df_sorted)
         df_sorted['댓글'] = list(cmts) if cmts else [0] * len(df_sorted)
         df_sorted['카테고리'] = list(cats) if cats else ["뉴스"] * len(df_sorted)
         df_sorted['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_sorted)
         df_sorted['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_sorted)
+        # 24시간, 48시간 조회수 추가
+        df_sorted['조회수_24h'] = df_sorted['pagePath'].apply(lambda x: views_24h_dict.get(x, 0))
+        df_sorted['조회수_48h'] = df_sorted['pagePath'].apply(lambda x: views_48h_dict.get(x, 0))
         
         def is_excluded_author(row):
             a = str(row['작성자']).lower().replace(' ', '')

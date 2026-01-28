@@ -132,17 +132,29 @@ def render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily,
     """, unsafe_allow_html=True)
 
 # ----------------- 2. 접근 경로 -----------------
-def render_traffic(df_traffic_curr, df_traffic_last):
+def render_traffic(df_traffic_curr, df_traffic_last, selected_week=None):
     st.markdown('<div class="section-header-container"><div class="section-header">2. 주간 접근 경로 분석</div></div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     
-    fig1 = px.pie(df_traffic_curr, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
-    fig1.update_layout(height=350, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
-    with c1: st.plotly_chart(fig1, use_container_width=True, key="traffic_curr_chart")
+    # 주차 번호 추출
+    current_week_num = ""
+    last_week_num = ""
+    if selected_week:
+        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
+        if current_week_num:
+            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
     
-    fig2 = px.pie(df_traffic_last, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
-    fig2.update_layout(height=280, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
-    with c2: st.plotly_chart(fig2, use_container_width=True, key="traffic_last_chart")
+    with c1: 
+        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
+        fig1 = px.pie(df_traffic_curr, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
+        fig1.update_layout(height=350, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
+        st.plotly_chart(fig1, use_container_width=True, key="traffic_curr_chart")
+    
+    with c2: 
+        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
+        fig2 = px.pie(df_traffic_last, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
+        fig2.update_layout(height=280, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
+        st.plotly_chart(fig2, use_container_width=True, key="traffic_last_chart")
     
     st.markdown('<div class="sub-header">주요 유입경로 비중 변화</div>', unsafe_allow_html=True)
     df_m = pd.merge(df_traffic_curr, df_traffic_last, on='유입경로', suffixes=('_이번', '_지난'))
@@ -165,20 +177,28 @@ def render_traffic(df_traffic_curr, df_traffic_last):
     """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (지역) -----------------
-def render_demo_region(df_region_curr, df_region_last):
+def render_demo_region(df_region_curr, df_region_last, selected_week=None):
     st.markdown('<div class="section-header-container"><div class="section-header">3. 주간 전체 방문자 특성 분석 (지역)</div></div>', unsafe_allow_html=True)
     st.markdown("<div class='sub-header'>지역별 분석</div>", unsafe_allow_html=True)
     c_curr, c_last = st.columns(2)
     custom_margin = dict(t=20, b=20, l=0, r=0)
     
+    # 주차 번호 추출
+    current_week_num = ""
+    last_week_num = ""
+    if selected_week:
+        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
+        if current_week_num:
+            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
+    
     with c_curr:
-        st.markdown(f"**이번주**")
+        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
         fig_c = create_donut_chart_with_val(df_region_curr, '구분', 'activeUsers', None, height=350, margin=custom_margin, rotation=90, show_legend=True, limit_labels=5)
         fig_c.update_traces(textfont_size=11)
         st.plotly_chart(fig_c, use_container_width=True, key="region_curr_chart")
         
     with c_last:
-        st.markdown(f"**지난주 (비교)**")
+        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
         fig_l = create_donut_chart_with_val(df_region_last, '구분', 'activeUsers', None, height=280, margin=custom_margin, rotation=90, show_legend=True, limit_labels=5)
         fig_l.update_traces(textfont_size=11)
         st.plotly_chart(fig_l, use_container_width=True, key="region_last_chart")
@@ -212,12 +232,20 @@ def render_demo_region(df_region_curr, df_region_last):
     """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (연령/성별) -----------------
-def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last):
+def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last, selected_week=None):
     st.markdown('<div class="section-header-container"><div class="section-header">3. 주간 전체 방문자 특성 분석 (연령/성별)</div></div>', unsafe_allow_html=True)
     sub_titles = ['연령별', '성별']
     curr_data = [df_age_curr, df_gender_curr]
     last_data = [df_age_last, df_gender_last]
     color_maps = [None, COLOR_GENDER]
+    
+    # 주차 번호 추출
+    current_week_num = ""
+    last_week_num = ""
+    if selected_week:
+        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
+        if current_week_num:
+            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
     
     for i in range(2):
         st.markdown(f"<div class='sub-header'>{sub_titles[i]} 분석</div>", unsafe_allow_html=True)
@@ -226,13 +254,13 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
         d_l = last_data[i]
         
         with c_curr:
-            st.markdown(f"**이번주**")
+            st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
             if d_c.empty or d_c['activeUsers'].sum() == 0:
                 st.warning("⚠️ 이번주 데이터 없음 (GA4 비식별 처리)")
             else:
                 st.plotly_chart(create_donut_chart_with_val(d_c, '구분', 'activeUsers', color_maps[i]), use_container_width=True, key=f"demo_curr_{i}_chart")
         with c_last:
-            st.markdown(f"**지난주 (비교)**")
+            st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
             if d_l.empty or d_l['activeUsers'].sum() == 0:
                 st.info("지난주 데이터 없음")
             else:
@@ -279,13 +307,26 @@ def render_top10_detail(df_top10):
         if '작성자' in df_p4.columns:
             df_p4['작성자'] = df_p4['작성자'].apply(clean_author_name)
         df_p4_display = df_p4.copy()
+        # 24시간, 48시간 조회수 포맷팅
+        if '조회수_24h' in df_p4.columns:
+            df_p4['24시간조회수'] = df_p4['조회수_24h'].apply(safe_format_int)
+        else:
+            df_p4['24시간조회수'] = '0'
+        if '조회수_48h' in df_p4.columns:
+            df_p4['48시간조회수'] = df_p4['조회수_48h'].apply(safe_format_int)
+        else:
+            df_p4['48시간조회수'] = '0'
+        
+        df_p4_display = df_p4.copy()
         df_p4_display = df_p4_display.rename(columns={
             '전체조회수': '최근 7일간 조회수',
             '전체방문자수': '최근 7일간 방문자수',
             '체류시간_fmt': '체류시간',
-            '최다유입': '최다 유입경로'
+            '최다유입': '최다 유입경로',
+            '24시간조회수': '24시간(00:00~23:59)',
+            '48시간조회수': '48시간(그 전날 00:00~23:59)'
         })
-        cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','좋아요','댓글']
+        cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','24시간(00:00~23:59)','48시간(그 전날 00:00~23:59)','좋아요','댓글']
         st.dataframe(df_p4_display[cols], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주

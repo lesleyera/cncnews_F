@@ -80,7 +80,7 @@ if st.session_state['print_mode']:
     
     views.render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily, active_article_count, published_article_count)
     st.markdown("<br>", unsafe_allow_html=True)
-    views.render_traffic(df_traffic_curr, df_traffic_last)
+    views.render_traffic(df_traffic_curr, df_traffic_last, selected_week)
     
     st.markdown('<div class="page-break"></div>', unsafe_allow_html=True)
     
@@ -115,9 +115,9 @@ else:
     with tabs[0]: views.render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily, active_article_count, published_article_count)
     with tabs[1]: views.render_traffic(df_traffic_curr, df_traffic_last)
     with tabs[2]: 
-        views.render_demo_region(df_region_curr, df_region_last)
+        views.render_demo_region(df_region_curr, df_region_last, selected_week)
         st.markdown("---")
-        views.render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last)
+        views.render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last, selected_week)
     with tabs[3]: views.render_top10_detail(df_top10)
     # [수정] df_top10_sources 인자 추가
     with tabs[4]: views.render_top10_trends(df_top10, df_top10_sources)
