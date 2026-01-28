@@ -110,6 +110,20 @@ def render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily,
             
             fig2.update_layout(barmode='group', plot_bgcolor='white', margin=dict(t=30), yaxis=dict(tickformat=","), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig2, use_container_width=True, key="summary_weekly_chart")
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 활성 기사 수: 클릭이 발생한 기사 경로 수 (GA4 pagePath 기준)<br>
+    • 발행 기사 수: 전체 활성 기사 수<br>
+    • 조회수(PV): GA4 screenPageViews 합계<br>
+    • 방문자수(UV): GA4 activeUsers 합계<br>
+    • 방문자당 페이지뷰: PV ÷ UV<br>
+    • 신규 방문자 비율: (신규 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    • 검색 유입 비율: (검색엔진 유입 조회수 ÷ 전체 조회수) × 100
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 2. 접근 경로 -----------------
 def render_traffic(df_traffic_curr, df_traffic_last):
@@ -133,6 +147,16 @@ def render_traffic(df_traffic_curr, df_traffic_last):
     df_m.sort_values('이번주 비중', ascending=False, inplace=True)
     
     st.dataframe(df_m[['유입경로', '이번주 비중', '지난주 비중', '비중 변화']].copy().assign(**{'비중 변화': lambda x: x['비중 변화'].apply(lambda v: f"{v:+.1f}%p")}), use_container_width=True, hide_index=True)
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 유입경로별 조회수: GA4 sessionSource별 screenPageViews 합계<br>
+    • 비중: (해당 유입경로 조회수 ÷ 전체 조회수) × 100<br>
+    • 비중 변화: 이번주 비중 - 지난주 비중 (%p)
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (지역) -----------------
 def render_demo_region(df_region_curr, df_region_last):
@@ -171,6 +195,15 @@ def render_demo_region(df_region_curr, df_region_last):
         df_disp['지난주(%)'] = df_disp['비율_지난'].astype(str) + '%'
         df_disp['변화(%p)'] = df_disp['변화(%p)'].apply(lambda x: f"{x:+.1f}%p")
         st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True)
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 지역별 비율: (해당 지역 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    • 변화(%p): 이번주 비율 - 지난주 비율
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (연령/성별) -----------------
 def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last):
@@ -214,6 +247,16 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
             df_disp['변화(%p)'] = df_disp['변화(%p)'].apply(lambda x: f"{x:+.1f}%p")
             st.dataframe(df_disp[['구분', '이번주(%)', '지난주(%)', '변화(%p)']], use_container_width=True, hide_index=True)
         st.markdown("<hr>", unsafe_allow_html=True)
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 연령별 비율: (해당 연령 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    • 성별 비율: (해당 성별 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    • 변화(%p): 이번주 비율 - 지난주 비율
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 4. Top 10 상세 -----------------
 def render_top10_detail(df_top10):
@@ -234,6 +277,18 @@ def render_top10_detail(df_top10):
         })
         cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','좋아요','댓글']
         st.dataframe(df_p4_display[cols], use_container_width=True, hide_index=True)
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 조회수: GA4 screenPageViews (최근 7일간)<br>
+    • 방문자수: GA4 activeUsers (최근 7일간)<br>
+    • 신규방문자비율: (신규 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    • 체류시간: GA4 userEngagementDuration 평균<br>
+    • 순위: 조회수 기준 내림차순 정렬
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 5. Top 10 추이 -----------------
 def render_top10_trends(df_top10, df_top10_sources=None):
@@ -291,6 +346,16 @@ def render_top10_trends(df_top10, df_top10_sources=None):
             st.plotly_chart(fig, use_container_width=True, key="top10_source_distribution_chart")
         else:
             st.warning("기사별 유입경로 상세 데이터가 없습니다.")
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 유입경로별 조회수: GA4 sessionSource별 screenPageViews 합계<br>
+    • 유입경로 1순위: 해당 기사에 가장 많이 유입된 경로<br>
+    • 조회수 분포: 기사별 유입경로(매체)별 조회수 비중
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 6. 카테고리 -----------------
 def render_category(df_top10):
@@ -330,9 +395,17 @@ def render_category(df_top10):
         
         st.plotly_chart(px.bar(cat_sub, x='세부카테고리', y='기사수_num', text_auto=True, color='카테고리', color_discrete_sequence=CHART_PALETTE).update_layout(plot_bgcolor='white', yaxis_title="기사수"), use_container_width=True, key="category_sub_chart")
         st.dataframe(cat_sub[['카테고리', '세부카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True)
-        
-        # [수정] 각주 추가
-        st.markdown("<div style='font-size: 0.85rem; color: #78909c; margin-top: 5px;'>* 평균조회수: 카테고리 전체 조회수 ÷ 카테고리 기사 수</div>", unsafe_allow_html=True)
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 기사 수: 카테고리별 기사 수 (비중% 포함)<br>
+    • 전체조회수: 카테고리별 기사 조회수 합계<br>
+    • 평균조회수: 카테고리 전체 조회수 ÷ 카테고리 기사 수<br>
+    • 비중: (카테고리 기사 수 ÷ 전체 기사 수) × 100
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 7. 기자 (통합) -----------------
 def render_writer_integrated(writers_df):
@@ -362,6 +435,17 @@ def render_writer_integrated(writers_df):
             st.dataframe(disp_w_pen, use_container_width=True, hide_index=True)
         else: 
             st.info("필명 기자 실적 없음")
+    
+    # 산식 각주
+    st.markdown("""
+    <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
+    <strong>산식:</strong><br>
+    • 발행기사 수: 기자별 기사 수 합계<br>
+    • 전체 조회 수: 기자별 기사 조회수 합계<br>
+    • 기사 1건 당 평균 조회 수: 총조회수 ÷ 발행기사 수<br>
+    • 순위: 총조회수 기준 내림차순 정렬
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------- 7. 기자 (본명) - 하위 호환성 유지 -----------------
 def render_writer_real(writers_df):
