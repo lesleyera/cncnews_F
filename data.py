@@ -127,6 +127,17 @@ def crawl_single_article_cached(url_path):
             if fallback_elem:
                 target_text = fallback_elem.parent.get_text(separator=' ', strip=True)
 
+        # [Priority 3] <dd class='winfo'> 안의 <span class="date">에서 발행일시 추출
+        if reg_date == "-":
+            winfo_dd = soup.select_one("dd.winfo")
+            if winfo_dd:
+                date_span = winfo_dd.select_one("span.date")
+                if date_span:
+                    date_text = date_span.get_text(strip=True)
+                    # "2026.01.28" 형식을 "2026-01-28"로 변환
+                    if re.match(r'\d{4}\.\d{2}\.\d{2}', date_text):
+                        reg_date = date_text.replace('.', '-')
+        
         # 파싱 ("쿡앤셰프 / 기사승인 : 2026-01-07 ...")
         if "기사승인" in target_text:
             parts = target_text.split("기사승인")
@@ -148,7 +159,11 @@ def crawl_single_article_cached(url_path):
         # Fallback
         if reg_date == "-":
             date_match = re.search(r'\d{4}[.-]\d{2}[.-]\d{2}(\s+\d{2}:\d{2})?', soup.text)
-            if date_match: reg_date = date_match.group()
+            if date_match: 
+                reg_date = date_match.group()
+                # "2026.01.28" 형식을 "2026-01-28"로 변환
+                if '.' in reg_date and ' ' not in reg_date:
+                    reg_date = reg_date.replace('.', '-')
         
         if author == "관리자" or len(author) > 20:
              author_tag = soup.select_one('.user-name') or soup.select_one('.writer') or soup.select_one('.byline')
@@ -508,15 +523,14 @@ def load_all_dashboard_data(selected_week):
         mask_article_all = df_raw_all_articles_filtered['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
         df_raw_all_articles_filtered = df_raw_all_articles_filtered[mask_article_all].copy()
         
-        # 발행기사 수 계산: 주소만 보고 판별 (크롤링 없이)
-        # 전체 활성 기사 수를 발행기사 수로 사용
-        published_article_count = len(df_raw_all_articles_filtered) if not df_raw_all_articles_filtered.empty else 0
-        
-        # 6-7페이지용: 전체 활성 기사에 대해 크롤링 수행 (작성자, 카테고리 정보 획득)
+        # 발행기사 수 계산: 크롤링하여 해당 주차 내에 발행된 기사 건수 계산
+        published_article_count = 0
         if not df_raw_all_articles_filtered.empty:
             all_paths = df_raw_all_articles_filtered['pagePath'].tolist()
             scraped_data_dict = {}
+            published_dates_dict = {}
             
+            # 전체 활성 기사에 대해 크롤링 수행 (작성자, 카테고리, 발행일시 정보 획득)
             with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
                 futures = {executor.submit(crawl_single_article_cached, path): path for path in all_paths}
                 for future in concurrent.futures.as_completed(futures):
@@ -524,10 +538,34 @@ def load_all_dashboard_data(selected_week):
                     try:
                         result = future.result(timeout=3.0)
                         scraped_data_dict[path] = result
+                        # result는 (author, likes, comments, cat, subcat, reg_date) 튜플
+                        reg_date = result[5] if len(result) > 5 else "-"
+                        published_dates_dict[path] = reg_date
                     except:
                         scraped_data_dict[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
+                        published_dates_dict[path] = "-"
             
-            # 크롤링 데이터 병합
+            # 발행일시가 해당 주차 범위 내에 있는 기사만 카운트
+            s_dt_date = datetime.strptime(s_dt, '%Y-%m-%d').date()
+            e_dt_date = datetime.strptime(e_dt, '%Y-%m-%d').date()
+            
+            def is_published_in_week(reg_date_str):
+                if reg_date_str == "-" or not reg_date_str:
+                    return False
+                try:
+                    # "2026-01-28" 또는 "2026-01-28 14:30" 형식 파싱
+                    date_part = reg_date_str.split()[0] if ' ' in reg_date_str else reg_date_str
+                    # "2026.01.28" 형식도 처리
+                    if '.' in date_part:
+                        date_part = date_part.replace('.', '-')
+                    pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                    return s_dt_date <= pub_date <= e_dt_date
+                except:
+                    return False
+            
+            published_article_count = sum(1 for path in all_paths if is_published_in_week(published_dates_dict.get(path, "-")))
+            
+            # 6-7페이지용: 크롤링 데이터 병합
             df_all_articles_with_metadata = df_raw_all_articles_filtered.copy()
             scraped_data = [scraped_data_dict.get(path, ("관리자", 0, 0, "뉴스", "이슈", "-")) for path in all_paths]
             auths, lks, cmts, cats, subcats, reg_dates = zip(*scraped_data) if scraped_data else ([], [], [], [], [], [])
