@@ -7,6 +7,17 @@ def clean_author_name(name):
     if not name: return "미상"
     # 직함 제거: 전문기자, 기자 등
     name = name.replace('#', '').replace('전문기자', '').replace('기자', '').strip()
+    
+    # 2어절 직함 제거: 편집인, 전문 등
+    words = name.split()
+    if len(words) >= 2:
+        # 첫 번째 단어가 직함인 경우 제거 (편집인, 전문 등)
+        if words[0] in ['편집인', '전문', '기자', '편집']:
+            name = ' '.join(words[1:])
+        # 마지막 단어가 직함인 경우 제거
+        elif words[-1] in ['편집인', '전문', '기자', '편집']:
+            name = ' '.join(words[:-1])
+    
     return ' '.join(name.split())
 
 def get_sunday_to_saturday_ranges(count=12):
