@@ -572,17 +572,17 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         writers_by_real['순위'] = range(1, len(writers_by_real)+1)
         writers_by_real['평균조회수'] = (writers_by_real['총조회수']/writers_by_real['기사수']).astype(int)
         
-        # 비율 계산
+        # 비율 계산 (각 지표 중에서의 점유율)
         total_views = writers_by_real['총조회수'].sum()
-        avg_views_mean = writers_by_real['평균조회수'].mean()
+        total_avg_views = writers_by_real['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
         
         st.markdown('<div class="sub-header">본명 기준</div>', unsafe_allow_html=True)
         st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
         
         disp_w = writers_by_real.copy()
-        # 비율 계산 및 포맷팅
+        # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
         disp_w['총조회수_비율'] = (disp_w['총조회수'] / total_views * 100).round(1) if total_views > 0 else 0
-        disp_w['평균조회수_비율'] = (disp_w['평균조회수'] / avg_views_mean * 100).round(1) if avg_views_mean > 0 else 0
+        disp_w['평균조회수_비율'] = (disp_w['평균조회수'] / total_avg_views * 100).round(1) if total_avg_views > 0 else 0
         
         # 포맷팅: 숫자 + 비율
         disp_w['총조회수_포맷'] = disp_w.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
@@ -634,17 +634,17 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
             writers_by_pen['순위'] = range(1, len(writers_by_pen)+1)
             writers_by_pen['평균조회수'] = (writers_by_pen['총조회수']/writers_by_pen['기사수']).astype(int)
             
-            # 비율 계산
+            # 비율 계산 (각 지표 중에서의 점유율)
             total_views_pen = writers_by_pen['총조회수'].sum()
-            avg_views_mean_pen = writers_by_pen['평균조회수'].mean()
+            total_avg_views_pen = writers_by_pen['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
             
             st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
             st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
             
             disp_w_pen = writers_by_pen.copy()
-            # 비율 계산 및 포맷팅
+            # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
             disp_w_pen['총조회수_비율'] = (disp_w_pen['총조회수'] / total_views_pen * 100).round(1) if total_views_pen > 0 else 0
-            disp_w_pen['평균조회수_비율'] = (disp_w_pen['평균조회수'] / avg_views_mean_pen * 100).round(1) if avg_views_mean_pen > 0 else 0
+            disp_w_pen['평균조회수_비율'] = (disp_w_pen['평균조회수'] / total_avg_views_pen * 100).round(1) if total_avg_views_pen > 0 else 0
             
             # 포맷팅: 숫자 + 비율
             disp_w_pen['총조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
