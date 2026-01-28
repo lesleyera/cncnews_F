@@ -629,14 +629,14 @@ def load_all_dashboard_data(selected_week):
             if found_older_articles and not page_has_week_article:
                 break
         
-        # 발행기사 수 계산
-        published_article_count = len(published_articles_from_list)
-        
         # 6-7페이지용: 해당 주차에 발행된 기사만 크롤링하여 메타데이터 획득
         if published_articles_from_list:
             published_paths = [a['path'] for a in published_articles_from_list]
             # GA4 데이터와 매칭하여 조회수 등 정보 가져오기
             df_published_articles = df_raw_all_articles_filtered[df_raw_all_articles_filtered['pagePath'].isin(published_paths)].copy()
+            
+            # 발행기사 수 계산: GA4 데이터와 매칭된 기사만 카운트 (1페이지 발행기사 수와 동일한 기준)
+            published_article_count = len(df_published_articles) if not df_published_articles.empty else 0
             
             if not df_published_articles.empty:
                 # 해당 기사들에 대해 상세 정보 크롤링 (작성자, 카테고리 등)
