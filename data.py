@@ -639,10 +639,13 @@ def load_all_dashboard_data(selected_week):
             published_article_count = len(df_published_articles) if not df_published_articles.empty else 0
             
             if not df_published_articles.empty:
+                # GA4 데이터와 매칭된 기사의 경로만 사용 (df_published_articles의 실제 경로)
+                matched_paths = df_published_articles['pagePath'].tolist()
+                
                 # 해당 기사들에 대해 상세 정보 크롤링 (작성자, 카테고리 등)
                 scraped_data_dict = {}
                 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                    futures = {executor.submit(crawl_single_article_cached, path): path for path in published_paths}
+                    futures = {executor.submit(crawl_single_article_cached, path): path for path in matched_paths}
                     for future in concurrent.futures.as_completed(futures):
                         path = futures[future]
                         try:
@@ -651,16 +654,26 @@ def load_all_dashboard_data(selected_week):
                         except:
                             scraped_data_dict[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
                 
-                scraped_data = [scraped_data_dict.get(path, ("관리자", 0, 0, "뉴스", "이슈", "-")) for path in published_paths]
-                auths, lks, cmts, cats, subcats, reg_dates = zip(*scraped_data) if scraped_data else ([], [], [], [], [], [])
-                
+                # df_published_articles의 각 행에 맞춰서 크롤링 데이터 매핑
                 df_all_articles_with_metadata = df_published_articles.copy()
-                df_all_articles_with_metadata['작성자'] = list(auths) if auths else ["관리자"] * len(df_all_articles_with_metadata)
-                df_all_articles_with_metadata['좋아요'] = list(lks) if lks else [0] * len(df_all_articles_with_metadata)
-                df_all_articles_with_metadata['댓글'] = list(cmts) if cmts else [0] * len(df_all_articles_with_metadata)
-                df_all_articles_with_metadata['카테고리'] = list(cats) if cats else ["뉴스"] * len(df_all_articles_with_metadata)
-                df_all_articles_with_metadata['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_all_articles_with_metadata)
-                df_all_articles_with_metadata['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['작성자'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[0]
+                )
+                df_all_articles_with_metadata['좋아요'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[1]
+                )
+                df_all_articles_with_metadata['댓글'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[2]
+                )
+                df_all_articles_with_metadata['카테고리'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[3]
+                )
+                df_all_articles_with_metadata['세부카테고리'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[4]
+                )
+                df_all_articles_with_metadata['실발행일시'] = df_all_articles_with_metadata['pagePath'].apply(
+                    lambda x: scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))[5] if len(scraped_data_dict.get(x, ("관리자", 0, 0, "뉴스", "이슈", "-"))) > 5 else "-"
+                )
                 
                 # 컬럼명 변경 및 정리
                 df_all_articles_with_metadata = df_all_articles_with_metadata.rename(columns={
