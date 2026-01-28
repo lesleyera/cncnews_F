@@ -64,7 +64,7 @@ def run_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=No
         "metrics": [Metric(name=m) for m in metrics],
         "date_ranges": [DateRange(start_date=start_date, end_date=end_date)],
         "order_bys": order_bys,
-        "limit": limit if limit else 10000
+        "limit": limit if limit is not None else 100000  # limit=None일 때 충분히 큰 값으로 설정
     }
     if dimension_filter:
         request_params["dimension_filter"] = dimension_filter
@@ -337,16 +337,23 @@ def load_all_dashboard_data(selected_week):
                 df_gender_last = pd.DataFrame({'구분': ['기타'], 'activeUsers': [total_gl]})
 
     # 6. TOP 10 및 크롤링
+    # 6-0. 전체 활성 기사 데이터 가져오기 (활성기사 수, 발행기사 수 계산용)
+    df_raw_all_articles = run_ga4_report(s_dt, e_dt, ["pageTitle", "pagePath"], ["screenPageViews", "activeUsers", "newUsers", "userEngagementDuration", "bounceRate"], "screenPageViews", limit=None)
+    
+    # 활성기사 수 계산 (전체 활성 기사 기준)
+    active_article_count = 0
+    if not df_raw_all_articles.empty:
+        mask_article = df_raw_all_articles['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
+        active_article_count = df_raw_all_articles[mask_article].shape[0]
+        if active_article_count == 0:
+            active_article_count = df_raw_all_articles[df_raw_all_articles['pagePath'].str.len() > 1].shape[0]
+    
+    # TOP 10 선정용 데이터 (크롤링은 top10만 수행)
     df_raw_top = run_ga4_report(s_dt, e_dt, ["pageTitle", "pagePath"], ["screenPageViews", "activeUsers", "newUsers", "userEngagementDuration", "bounceRate"], "screenPageViews", limit=100)
     
     df_top10_sources = pd.DataFrame()
 
     if not df_raw_top.empty:
-        mask_article = df_raw_top['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
-        active_article_count = df_raw_top[mask_article].shape[0]
-        if active_article_count == 0:
-            active_article_count = df_raw_top[df_raw_top['pagePath'].str.len() > 1].shape[0]
-        
         def is_excluded(row):
             t = str(row['pageTitle']).lower().replace(' ', '')
             if 'cook&chef' in t or '쿡앤셰프' in t: return True
@@ -469,10 +476,25 @@ def load_all_dashboard_data(selected_week):
         df_top10 = pd.DataFrame()
         df_raw_all = pd.DataFrame()
         df_top10_sources = pd.DataFrame()
+    
+    # 전체 활성 기사 데이터 정리 (발행기사 수 계산용)
+    if not df_raw_all_articles.empty:
+        def is_excluded_all(row):
+            t = str(row['pageTitle']).lower().replace(' ', '')
+            if 'cook&chef' in t or '쿡앤셰프' in t: return True
+            return False
+        exclude_mask_all = df_raw_all_articles.apply(is_excluded_all, axis=1)
+        df_raw_all_articles_filtered = df_raw_all_articles[~exclude_mask_all].copy()
+        
+        # 기사 경로 필터링
+        mask_article_all = df_raw_all_articles_filtered['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
+        df_raw_all_articles_filtered = df_raw_all_articles_filtered[mask_article_all].copy()
+    else:
+        df_raw_all_articles_filtered = pd.DataFrame()
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
-            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources)
+            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, df_raw_all_articles_filtered)
 
 def get_writers_df_real(df_target):
     # 1. 엑셀 데이터로부터 매핑 딕셔너리 생성 (필명 -> 본명)
