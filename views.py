@@ -412,11 +412,11 @@ def render_category(df_top10):
 
 # ----------------- 7. 기자 (통합) -----------------
 def render_writer_integrated(writers_df):
-    st.markdown('<div class="section-header-container"><div class="section-header">7. 기자(통합)</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header-container"><div class="section-header">7. 이번주 기자별 분석</div></div>', unsafe_allow_html=True)
     
     if not writers_df.empty:
-        # 1) 본명 기준 표
-        st.markdown('<div class="sub-header">1) 본명 기준</div>', unsafe_allow_html=True)
+        # 본명 기준 표
+        st.markdown('<div class="sub-header">본명 기준</div>', unsafe_allow_html=True)
         disp_w = writers_df.copy()
         for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
         disp_w = disp_w[['순위', '작성자', '필명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
@@ -425,8 +425,8 @@ def render_writer_integrated(writers_df):
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 2) 필명 기준 표
-        st.markdown('<div class="sub-header">2) 필명 기준</div>', unsafe_allow_html=True)
+        # 필명 기준 표
+        st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
         df_pen = writers_df[writers_df['필명'] != ''].copy()
         if not df_pen.empty:
             df_pen['순위'] = df_pen['총조회수'].rank(method='min', ascending=False).astype(int)

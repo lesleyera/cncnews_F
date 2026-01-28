@@ -90,6 +90,56 @@ def run_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=No
     except: return pd.DataFrame(columns=dimensions + metrics)
 
 @st.cache_data(ttl=86400)
+def crawl_article_list_page(page_num=1):
+    """전체 기사 목록 페이지 크롤링: 해당 주차 기간의 기사만 추출"""
+    base_url = "http://www.cooknchefnews.com/news/cate/"
+    url = f"{base_url}?pagenum={page_num}"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=5.0)
+        response.encoding = response.apparent_encoding
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        articles = []
+        # <dl> 태그로 각 기사 추출
+        dl_list = soup.select('dl')
+        
+        for dl in dl_list:
+            try:
+                # 기사 링크 추출
+                dt = dl.select_one('dt')
+                if not dt:
+                    continue
+                link_elem = dt.select_one('a')
+                if not link_elem:
+                    continue
+                article_path = link_elem.get('href', '')
+                
+                # 발행일시 추출 (<dd class='winfo'><span class="date">)
+                winfo_dd = dl.select_one("dd.winfo")
+                if winfo_dd:
+                    date_span = winfo_dd.select_one("span.date")
+                    if date_span:
+                        date_text = date_span.get_text(strip=True)
+                        # "2026.01.28" 형식을 "2026-01-28"로 변환
+                        if re.match(r'\d{4}\.\d{2}\.\d{2}', date_text):
+                            date_text = date_text.replace('.', '-')
+                        articles.append({
+                            'path': article_path,
+                            'published_date': date_text
+                        })
+            except:
+                continue
+        
+        return articles
+    except:
+        return []
+
+@st.cache_data(ttl=86400)
 def crawl_single_article_cached(url_path):
     """크롤링: 헤더 추가, 인코딩 보정, 하이브리드 파싱(DOM+텍스트패턴)"""
     full_url = f"http://www.cooknchefnews.com{url_path}"
@@ -523,77 +573,116 @@ def load_all_dashboard_data(selected_week):
         mask_article_all = df_raw_all_articles_filtered['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
         df_raw_all_articles_filtered = df_raw_all_articles_filtered[mask_article_all].copy()
         
-        # 발행기사 수 계산: 크롤링하여 해당 주차 내에 발행된 기사 건수 계산
+        # 발행기사 수 계산: 전체 기사 목록 페이지 크롤링으로 속도 개선
         published_article_count = 0
-        if not df_raw_all_articles_filtered.empty:
-            all_paths = df_raw_all_articles_filtered['pagePath'].tolist()
-            scraped_data_dict = {}
-            published_dates_dict = {}
-            
-            # 전체 활성 기사에 대해 크롤링 수행 (작성자, 카테고리, 발행일시 정보 획득)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                futures = {executor.submit(crawl_single_article_cached, path): path for path in all_paths}
-                for future in concurrent.futures.as_completed(futures):
-                    path = futures[future]
-                    try:
-                        result = future.result(timeout=3.0)
-                        scraped_data_dict[path] = result
-                        # result는 (author, likes, comments, cat, subcat, reg_date) 튜플
-                        reg_date = result[5] if len(result) > 5 else "-"
-                        published_dates_dict[path] = reg_date
-                    except:
-                        scraped_data_dict[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
-                        published_dates_dict[path] = "-"
-            
-            # 발행일시가 해당 주차 범위 내에 있는 기사만 카운트
-            s_dt_date = datetime.strptime(s_dt, '%Y-%m-%d').date()
-            e_dt_date = datetime.strptime(e_dt, '%Y-%m-%d').date()
-            
-            def is_published_in_week(reg_date_str):
-                if reg_date_str == "-" or not reg_date_str:
-                    return False
-                try:
-                    # "2026-01-28" 또는 "2026-01-28 14:30" 형식 파싱
-                    date_part = reg_date_str.split()[0] if ' ' in reg_date_str else reg_date_str
-                    # "2026.01.28" 형식도 처리
-                    if '.' in date_part:
-                        date_part = date_part.replace('.', '-')
-                    pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
-                    return s_dt_date <= pub_date <= e_dt_date
-                except:
-                    return False
-            
-            published_article_count = sum(1 for path in all_paths if is_published_in_week(published_dates_dict.get(path, "-")))
-            
-            # 6-7페이지용: 크롤링 데이터 병합
-            df_all_articles_with_metadata = df_raw_all_articles_filtered.copy()
-            scraped_data = [scraped_data_dict.get(path, ("관리자", 0, 0, "뉴스", "이슈", "-")) for path in all_paths]
-            auths, lks, cmts, cats, subcats, reg_dates = zip(*scraped_data) if scraped_data else ([], [], [], [], [], [])
-            
-            df_all_articles_with_metadata['작성자'] = list(auths) if auths else ["관리자"] * len(df_all_articles_with_metadata)
-            df_all_articles_with_metadata['좋아요'] = list(lks) if lks else [0] * len(df_all_articles_with_metadata)
-            df_all_articles_with_metadata['댓글'] = list(cmts) if cmts else [0] * len(df_all_articles_with_metadata)
-            df_all_articles_with_metadata['카테고리'] = list(cats) if cats else ["뉴스"] * len(df_all_articles_with_metadata)
-            df_all_articles_with_metadata['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_all_articles_with_metadata)
-            df_all_articles_with_metadata['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_all_articles_with_metadata)
-            
-            # 컬럼명 변경 및 정리
-            df_all_articles_with_metadata = df_all_articles_with_metadata.rename(columns={
-                'pageTitle': '제목', 
-                'pagePath': '경로', 
-                'screenPageViews': '전체조회수', 
-                'activeUsers': '전체방문자수', 
-                'userEngagementDuration': '평균체류시간', 
-                'bounceRate': '이탈률'
-            })
-            
-            # 작성자 필터링 (인기기사 제외)
-            def is_excluded_author_all(row):
-                a = str(row['작성자']).lower().replace(' ', '')
-                if '인기기사' in a: return True
+        s_dt_date = datetime.strptime(s_dt, '%Y-%m-%d').date()
+        e_dt_date = datetime.strptime(e_dt, '%Y-%m-%d').date()
+        
+        def is_published_in_week(reg_date_str):
+            if reg_date_str == "-" or not reg_date_str:
                 return False
-            exclude_mask_author_all = df_all_articles_with_metadata.apply(is_excluded_author_all, axis=1)
-            df_all_articles_with_metadata = df_all_articles_with_metadata[~exclude_mask_author_all].copy()
+            try:
+                # "2026-01-28" 또는 "2026-01-28 14:30" 형식 파싱
+                date_part = reg_date_str.split()[0] if ' ' in reg_date_str else reg_date_str
+                # "2026.01.28" 형식도 처리
+                if '.' in date_part:
+                    date_part = date_part.replace('.', '-')
+                pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                return s_dt_date <= pub_date <= e_dt_date
+            except:
+                return False
+        
+        # 전체 기사 목록 페이지 크롤링 (여러 페이지 확인) - 속도 개선
+        published_articles_from_list = []
+        max_pages_to_check = 20  # 최대 20페이지까지 확인 (충분한 범위)
+        found_articles_in_week = False
+        found_older_articles = False
+        
+        for page_num in range(1, max_pages_to_check + 1):
+            articles = crawl_article_list_page(page_num)
+            if not articles:
+                break  # 더 이상 기사가 없으면 중단
+            
+            page_has_week_article = False
+            for article in articles:
+                pub_date_str = article.get('published_date', '-')
+                if pub_date_str == '-':
+                    continue
+                
+                if is_published_in_week(pub_date_str):
+                    published_articles_from_list.append(article)
+                    page_has_week_article = True
+                    found_articles_in_week = True
+                else:
+                    # 주차 기간을 벗어난 기사 날짜 확인
+                    try:
+                        date_part = pub_date_str.split()[0] if ' ' in pub_date_str else pub_date_str
+                        if '.' in date_part:
+                            date_part = date_part.replace('.', '-')
+                        pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                        if pub_date < s_dt_date:
+                            found_older_articles = True
+                    except:
+                        pass
+            
+            # 주차 시작일보다 이전 기사만 있는 페이지가 나오면 중단 (최신순 정렬 가정)
+            if found_older_articles and not page_has_week_article:
+                break
+        
+        # 발행기사 수 계산
+        published_article_count = len(published_articles_from_list)
+        
+        # 6-7페이지용: 해당 주차에 발행된 기사만 크롤링하여 메타데이터 획득
+        if published_articles_from_list:
+            published_paths = [a['path'] for a in published_articles_from_list]
+            # GA4 데이터와 매칭하여 조회수 등 정보 가져오기
+            df_published_articles = df_raw_all_articles_filtered[df_raw_all_articles_filtered['pagePath'].isin(published_paths)].copy()
+            
+            if not df_published_articles.empty:
+                # 해당 기사들에 대해 상세 정보 크롤링 (작성자, 카테고리 등)
+                scraped_data_dict = {}
+                with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                    futures = {executor.submit(crawl_single_article_cached, path): path for path in published_paths}
+                    for future in concurrent.futures.as_completed(futures):
+                        path = futures[future]
+                        try:
+                            result = future.result(timeout=3.0)
+                            scraped_data_dict[path] = result
+                        except:
+                            scraped_data_dict[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
+                
+                scraped_data = [scraped_data_dict.get(path, ("관리자", 0, 0, "뉴스", "이슈", "-")) for path in published_paths]
+                auths, lks, cmts, cats, subcats, reg_dates = zip(*scraped_data) if scraped_data else ([], [], [], [], [], [])
+                
+                df_all_articles_with_metadata = df_published_articles.copy()
+                df_all_articles_with_metadata['작성자'] = list(auths) if auths else ["관리자"] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['좋아요'] = list(lks) if lks else [0] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['댓글'] = list(cmts) if cmts else [0] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['카테고리'] = list(cats) if cats else ["뉴스"] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_all_articles_with_metadata)
+                df_all_articles_with_metadata['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_all_articles_with_metadata)
+                
+                # 컬럼명 변경 및 정리
+                df_all_articles_with_metadata = df_all_articles_with_metadata.rename(columns={
+                    'pageTitle': '제목', 
+                    'pagePath': '경로', 
+                    'screenPageViews': '전체조회수', 
+                    'activeUsers': '전체방문자수', 
+                    'userEngagementDuration': '평균체류시간', 
+                    'bounceRate': '이탈률'
+                })
+                
+                # 작성자 필터링 (인기기사 제외)
+                def is_excluded_author_all(row):
+                    a = str(row['작성자']).lower().replace(' ', '')
+                    if '인기기사' in a: return True
+                    return False
+                exclude_mask_author_all = df_all_articles_with_metadata.apply(is_excluded_author_all, axis=1)
+                df_all_articles_with_metadata = df_all_articles_with_metadata[~exclude_mask_author_all].copy()
+            else:
+                df_all_articles_with_metadata = pd.DataFrame()
+        else:
+            df_all_articles_with_metadata = pd.DataFrame()
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
