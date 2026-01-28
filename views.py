@@ -265,12 +265,16 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
 def render_top10_detail(df_top10):
     st.markdown('<div class="section-header-container"><div class="section-header">4. 최근 7일 조회수 TOP 10 기사 상세</div></div>', unsafe_allow_html=True)
     if not df_top10.empty:
+        from utils import clean_author_name
         df_p4 = df_top10.copy()
         def safe_format_int(x):
             try: return f"{int(float(x)):,}"
             except: return str(x)
         for c in ['전체조회수','전체방문자수','좋아요','댓글']: 
             df_p4[c] = df_p4[c].apply(safe_format_int)
+        # 작성자에서 직함 제거 (1어절만 남김)
+        if '작성자' in df_p4.columns:
+            df_p4['작성자'] = df_p4['작성자'].apply(clean_author_name)
         df_p4_display = df_p4.copy()
         df_p4_display = df_p4_display.rename(columns={
             '전체조회수': '최근 7일간 조회수',
@@ -298,12 +302,17 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     st.markdown('<div class="section-header-container"><div class="section-header">5. TOP 10 기사 유입경로(매체)별 조회수 분포</div></div>', unsafe_allow_html=True)
     
     if not df_top10.empty:
+        from utils import clean_author_name
         df_p5 = df_top10.copy()
         def safe_format_int_col(x):
             try:
                 val_str = str(x).replace(',', '')
                 return f"{int(float(val_str)):,}"
             except: return str(x)
+        
+        # 작성자에서 직함 제거 (1어절만 남김)
+        if '작성자' in df_p5.columns:
+            df_p5['작성자'] = df_p5['작성자'].apply(clean_author_name)
         
         df_p5['전체조회수_fmt'] = df_p5['전체조회수'].apply(safe_format_int_col)
         df_p5 = df_p5.rename(columns={'전체조회수_fmt': '지난 7일간 조회수'})
@@ -411,31 +420,137 @@ def render_category(df_top10):
     """, unsafe_allow_html=True)
 
 # ----------------- 7. 기자 (통합) -----------------
-def render_writer_integrated(writers_df):
+def render_writer_integrated(writers_df, df_all_articles_with_metadata):
     st.markdown('<div class="section-header-container"><div class="section-header">7. 이번주 기자별 분석</div></div>', unsafe_allow_html=True)
     
-    if not writers_df.empty:
-        # 본명 기준 표
-        st.markdown('<div class="sub-header">본명 기준</div>', unsafe_allow_html=True)
-        disp_w = writers_df.copy()
-        for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w[c] = disp_w[c].apply(lambda x: f"{x:,}")
-        disp_w = disp_w[['순위', '작성자', '필명', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
-        disp_w.columns = ['순위', '본명', '필명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-        st.dataframe(disp_w, use_container_width=True, hide_index=True, height="content")
+    if not df_all_articles_with_metadata.empty and '작성자' in df_all_articles_with_metadata.columns:
+        # 본명 기준: 본명별 합산
+        from data import AUTHOR_MAPPING_DATA
+        from utils import clean_author_name
+        pen_to_real_map = {item['필명']: item['본명'] for item in AUTHOR_MAPPING_DATA}
+        
+        df_work = df_all_articles_with_metadata.copy()
+        # 작성자 이름에서 직함 제거 (한 번 더 정리)
+        df_work['작성자'] = df_work['작성자'].apply(clean_author_name)
+        df_work['본명'] = df_work['작성자'].map(pen_to_real_map).fillna(df_work['작성자'])
+        
+        # 본명 기준 집계
+        writers_by_real = df_work.groupby('본명').agg(
+            기사수=('제목','count'), 
+            총조회수=('전체조회수','sum'),
+            좋아요=('좋아요', 'sum'),
+            댓글=('댓글', 'sum')
+        ).reset_index()
+        writers_by_real = writers_by_real.sort_values('총조회수', ascending=False)
+        writers_by_real['순위'] = range(1, len(writers_by_real)+1)
+        writers_by_real['평균조회수'] = (writers_by_real['총조회수']/writers_by_real['기사수']).astype(int)
+        
+        # 비율 계산 (각 지표 중에서의 점유율)
+        total_views = writers_by_real['총조회수'].sum()
+        total_avg_views = writers_by_real['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
+        
+        st.markdown('<div class="sub-header">본명 기준(전체 조회수 기준)</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
+        
+        disp_w = writers_by_real.copy()
+        # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
+        disp_w['총조회수_비율'] = (disp_w['총조회수'] / total_views * 100).round(1) if total_views > 0 else 0
+        disp_w['평균조회수_비율'] = (disp_w['평균조회수'] / total_avg_views * 100).round(1) if total_avg_views > 0 else 0
+        
+        # 포맷팅: 숫자 + 비율
+        disp_w['총조회수_포맷'] = disp_w.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
+        disp_w['평균조회수_포맷'] = disp_w.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
+        disp_w['좋아요_포맷'] = disp_w['좋아요'].apply(lambda x: f"{x:,}")
+        disp_w['댓글_포맷'] = disp_w['댓글'].apply(lambda x: f"{x:,}")
+        
+        # 본명에서 직함 제거 (1어절만 남김)
+        disp_w['본명'] = disp_w['본명'].apply(clean_author_name)
+        
+        disp_w = disp_w[['순위', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
+        disp_w.columns = ['순위', '본명', '발행기사 수', '전체 조회수', '기사 1건당 조회수', '좋아요 개수', '댓글 개수']
+        
+        st.dataframe(
+            disp_w, 
+            use_container_width=True, 
+            hide_index=True,
+            height="content",
+            column_config={
+                "순위": st.column_config.NumberColumn("순위", format="%d"),
+                "본명": st.column_config.TextColumn("본명"),
+                "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
+                "전체 조회수": st.column_config.TextColumn("전체 조회수"),
+                "기사 1건당 조회수": st.column_config.TextColumn("기사 1건당 조회수"),
+                "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
+                "댓글 개수": st.column_config.TextColumn("댓글 개수")
+            }
+        )
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 필명 기준 표
-        st.markdown('<div class="sub-header">필명 기준</div>', unsafe_allow_html=True)
-        df_pen = writers_df[writers_df['필명'] != ''].copy()
-        if not df_pen.empty:
-            df_pen['순위'] = df_pen['총조회수'].rank(method='min', ascending=False).astype(int)
-            df_pen = df_pen.sort_values('순위')
-            disp_w_pen = df_pen.copy()
-            for c in ['총조회수','평균조회수','좋아요','댓글']: disp_w_pen[c] = disp_w_pen[c].apply(lambda x: f"{x:,}")
-            disp_w_pen = disp_w_pen[['순위', '필명', '작성자', '기사수', '총조회수', '평균조회수', '좋아요', '댓글']]
-            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회 수', '기사 1건 당 평균 조회 수', '좋아요 개수', '댓글 개수']
-            st.dataframe(disp_w_pen, use_container_width=True, hide_index=True, height="content")
+        # 필명 기준: 필명별 합산 (모든 필명 포함)
+        df_work_pen = df_all_articles_with_metadata.copy()
+        # 작성자 이름에서 직함 제거 (한 번 더 정리)
+        df_work_pen['작성자'] = df_work_pen['작성자'].apply(clean_author_name)
+        df_work_pen['본명_mapped'] = df_work_pen['작성자'].map(pen_to_real_map)
+        # 필명 기준은 모든 작성자(필명)를 포함 (본명과 같은 경우도 포함)
+        # 단, 매핑이 없는 경우는 본명으로 사용
+        df_work_pen['본명'] = df_work_pen['본명_mapped'].fillna(df_work_pen['작성자'])
+        
+        if not df_work_pen.empty:
+            writers_by_pen = df_work_pen.groupby('작성자').agg(
+                기사수=('제목','count'), 
+                총조회수=('전체조회수','sum'),
+                좋아요=('좋아요', 'sum'),
+                댓글=('댓글', 'sum')
+            ).reset_index()
+            writers_by_pen = writers_by_pen.rename(columns={'작성자': '필명'})
+            # 본명 매핑 (매핑이 없으면 필명 그대로)
+            writers_by_pen['본명'] = writers_by_pen['필명'].map(pen_to_real_map).fillna(writers_by_pen['필명'])
+            writers_by_pen = writers_by_pen.sort_values('총조회수', ascending=False)
+            writers_by_pen['순위'] = range(1, len(writers_by_pen)+1)
+            writers_by_pen['평균조회수'] = (writers_by_pen['총조회수']/writers_by_pen['기사수']).astype(int)
+            
+            # 비율 계산 (각 지표 중에서의 점유율)
+            total_views_pen = writers_by_pen['총조회수'].sum()
+            total_avg_views_pen = writers_by_pen['평균조회수'].sum()  # 평균 조회수 합계 (점유율 계산용)
+            
+            st.markdown('<div class="sub-header">필명 기준(전체 조회수 기준)</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size: 0.75rem; color: #78909c; margin-bottom: 5px;">(건, %)</div>', unsafe_allow_html=True)
+            
+            disp_w_pen = writers_by_pen.copy()
+            # 비율 계산 및 포맷팅 (각 지표 중에서의 점유율)
+            disp_w_pen['총조회수_비율'] = (disp_w_pen['총조회수'] / total_views_pen * 100).round(1) if total_views_pen > 0 else 0
+            disp_w_pen['평균조회수_비율'] = (disp_w_pen['평균조회수'] / total_avg_views_pen * 100).round(1) if total_avg_views_pen > 0 else 0
+            
+            # 포맷팅: 숫자 + 비율
+            disp_w_pen['총조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['총조회수']:,} ({x['총조회수_비율']:.1f}%)", axis=1)
+            disp_w_pen['평균조회수_포맷'] = disp_w_pen.apply(lambda x: f"{x['평균조회수']:,} ({x['평균조회수_비율']:.1f}%)", axis=1)
+            disp_w_pen['좋아요_포맷'] = disp_w_pen['좋아요'].apply(lambda x: f"{x:,}")
+            disp_w_pen['댓글_포맷'] = disp_w_pen['댓글'].apply(lambda x: f"{x:,}")
+            
+            # 본명, 필명에서 직함 제거 (1어절만 남김)
+            disp_w_pen['본명'] = disp_w_pen['본명'].apply(clean_author_name)
+            disp_w_pen['필명'] = disp_w_pen['필명'].apply(clean_author_name)
+            
+            disp_w_pen = disp_w_pen[['순위', '필명', '본명', '기사수', '총조회수_포맷', '평균조회수_포맷', '좋아요_포맷', '댓글_포맷']]
+            disp_w_pen.columns = ['순위', '필명', '본명', '발행기사 수', '전체 조회수', '기사 1건당 조회수', '좋아요 개수', '댓글 개수']
+            
+            st.dataframe(
+                disp_w_pen, 
+                use_container_width=True, 
+                hide_index=True,
+                height="content",
+                column_config={
+                    "순위": st.column_config.NumberColumn("순위", format="%d"),
+                    "필명": st.column_config.TextColumn("필명"),
+                    "본명": st.column_config.TextColumn("본명"),
+                    "발행기사 수": st.column_config.NumberColumn("발행기사 수", format="%d"),
+                    "전체 조회수": st.column_config.TextColumn("전체 조회수"),
+                    "기사 1건당 조회수": st.column_config.TextColumn("기사 1건당 조회수"),
+                    "좋아요 개수": st.column_config.TextColumn("좋아요 개수"),
+                    "댓글 개수": st.column_config.TextColumn("댓글 개수")
+                }
+            )
         else: 
             st.info("필명 기자 실적 없음")
     
@@ -444,8 +559,8 @@ def render_writer_integrated(writers_df):
     <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
     <strong>산식:</strong><br>
     • 발행기사 수: 기자별 기사 수 합계<br>
-    • 전체 조회 수: 기자별 기사 조회수 합계<br>
-    • 기사 1건 당 평균 조회 수: 총조회수 ÷ 발행기사 수<br>
+    • 전체 조회수: 기자별 기사 조회수 합계 (전체 대비 비율 %)<br>
+    • 기사 1건당 조회수: 총조회수 ÷ 발행기사 수 (전체 대비 비율 %)<br>
     • 순위: 총조회수 기준 내림차순 정렬
     </div>
     """, unsafe_allow_html=True)
