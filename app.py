@@ -66,7 +66,7 @@ st.markdown(f"<div class='update-time'>최종 집계: {datetime.now().strftime('
 # [수정] data.py에서 반환하는 df_top10_sources, published_article_count, df_all_articles_with_metadata 추가 수신 (총 20개 항목)
 (cur_uv, cur_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
  df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
- df_top10, df_raw_all, new_ratio, search_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata, df_all_articles_sources) = data.load_all_dashboard_data(selected_week)
+ df_top10, df_raw_all, new_ratio, search_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata) = data.load_all_dashboard_data(selected_week)
 
 # 기자별 데이터 생성 (본명 기준) - 전체 활성 기사 기준
 writers_df = data.get_writers_df_real(df_all_articles_with_metadata)
@@ -80,7 +80,7 @@ if st.session_state['print_mode']:
     
     views.render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily, active_article_count, published_article_count)
     st.markdown("<br>", unsafe_allow_html=True)
-    views.render_traffic(df_traffic_curr, df_traffic_last, selected_week)
+    views.render_traffic(df_traffic_curr, df_traffic_last)
     
     st.markdown('<div class="page-break"></div>', unsafe_allow_html=True)
     
@@ -115,9 +115,9 @@ else:
     with tabs[0]: views.render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily, active_article_count, published_article_count)
     with tabs[1]: views.render_traffic(df_traffic_curr, df_traffic_last)
     with tabs[2]: 
-        views.render_demo_region(df_region_curr, df_region_last, selected_week)
+        views.render_demo_region(df_region_curr, df_region_last)
         st.markdown("---")
-        views.render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last, selected_week)
+        views.render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last)
     with tabs[3]: views.render_top10_detail(df_top10)
     # [수정] df_top10_sources 인자 추가
     with tabs[4]: views.render_top10_trends(df_top10, df_top10_sources)

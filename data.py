@@ -509,131 +509,6 @@ def load_all_dashboard_data(selected_week):
         df_sorted['세부카테고리'] = list(subcats) if subcats else ["이슈"] * len(df_sorted)
         df_sorted['실발행일시'] = list(reg_dates) if reg_dates else ["-"] * len(df_sorted)
         
-        # 6-4. 24시간, 48시간 방문자수 데이터 수집 (하이브리드 방식: 다중 date_ranges + 발행일시 필터링)
-        def parse_publish_date(reg_date_str):
-            """발행일시 문자열을 datetime 객체로 변환"""
-            if reg_date_str == "-" or not reg_date_str:
-                return None
-            try:
-                # "2026-01-28" 또는 "2026-01-28 14:30" 형식 파싱
-                date_part = reg_date_str.split()[0] if ' ' in reg_date_str else reg_date_str
-                # "2026.01.28" 형식도 처리
-                if '.' in date_part:
-                    date_part = date_part.replace('.', '-')
-                # 시간이 있으면 파싱, 없으면 00:00:00으로 설정
-                if ' ' in reg_date_str:
-                    time_part = reg_date_str.split()[1]
-                    return datetime.strptime(f"{date_part} {time_part}", '%Y-%m-%d %H:%M')
-                else:
-                    return datetime.strptime(date_part, '%Y-%m-%d')
-            except Exception as e:
-                return None
-        
-        # 발행일시 정보를 DataFrame에 추가
-        df_sorted['발행일시_parsed'] = df_sorted['실발행일시'].apply(parse_publish_date)
-        
-        # 현재 시간
-        now = datetime.now()
-        now_date = now.date()
-        
-        users_24h_list = []
-        users_48h_list = []
-        
-        if not df_sorted.empty and len(paths) > 0:
-            # 다중 date_ranges를 사용하여 24h, 48h 데이터를 한 번에 조회
-            client = get_ga4_client()
-            if client:
-                try:
-                    # TOP 10 기사의 paths를 필터로 사용
-                    filter_paths = FilterExpression(
-                        filter=Filter(
-                            field_name="pagePath",
-                            in_list_filter=Filter.InListFilter(values=paths, case_sensitive=False)
-                        )
-                    )
-                    
-                    # 다중 date_ranges: 24h (yesterday ~ today), 48h (2daysAgo ~ today)
-                    request = RunReportRequest(
-                        property=f"properties/{config.PROPERTY_ID}",
-                        dimensions=[Dimension(name="pagePath")],
-                        metrics=[Metric(name="activeUsers")],
-                        date_ranges=[
-                            DateRange(start_date="yesterday", end_date="today", name="24h"),
-                            DateRange(start_date="2daysAgo", end_date="today", name="48h")
-                        ],
-                        dimension_filter=filter_paths,
-                        limit=100
-                    )
-                    
-                    response = client.run_report(request)
-                    
-                    # date_range별로 데이터 분리
-                    data_24h_dict = {}
-                    data_48h_dict = {}
-                    
-                    # GA4 API의 다중 date_ranges 응답 구조:
-                    # 각 row는 동일한 dimension 값을 가지지만, 
-                    # metric_values는 각 date_range별로 배열로 반환됨
-                    # 또는 각 date_range에 대해 별도 행이 반환될 수 있음
-                    
-                    # response 구조 확인: date_range_count 확인
-                    date_range_count = len(response.metadata.date_ranges) if hasattr(response, 'metadata') and hasattr(response.metadata, 'date_ranges') else 2
-                    
-                    for row in response.rows:
-                        page_path = row.dimension_values[0].value
-                        page_path_lower = str(page_path).strip().lower()
-                        
-                        # metric_values 배열에서 각 date_range별 값 추출
-                        # 첫 번째 값이 첫 번째 date_range (24h), 두 번째 값이 두 번째 date_range (48h)
-                        if len(row.metric_values) >= 2:
-                            data_24h_dict[page_path_lower] = int(row.metric_values[0].value) if row.metric_values[0].value else 0
-                            data_48h_dict[page_path_lower] = int(row.metric_values[1].value) if row.metric_values[1].value else 0
-                        elif len(row.metric_values) == 1:
-                            # date_range가 하나만 반환된 경우 (에러 처리)
-                            data_24h_dict[page_path_lower] = int(row.metric_values[0].value) if row.metric_values[0].value else 0
-                            data_48h_dict[page_path_lower] = 0
-                    
-                    # 각 기사별로 발행일시 기준 필터링
-                    for idx, row in df_sorted.iterrows():
-                        page_path = row['pagePath']
-                        publish_date = row['발행일시_parsed']
-                        
-                        users_24h = 0
-                        users_48h = 0
-                        
-                        # 발행일시가 있고, 현재보다 과거인 경우만 처리
-                        if publish_date and publish_date.date() <= now_date:
-                            page_path_lower = str(page_path).strip().lower()
-                            
-                            # 24h 데이터: yesterday ~ today 범위
-                            # 발행일시가 yesterday 이전 또는 같으면 해당 기간 데이터 사용
-                            yesterday = (now - timedelta(days=1)).date()
-                            if publish_date.date() <= yesterday:
-                                users_24h = data_24h_dict.get(page_path_lower, 0)
-                            
-                            # 48h 데이터: 2daysAgo ~ today 범위
-                            # 발행일시가 2daysAgo 이전 또는 같으면 해당 기간 데이터 사용
-                            two_days_ago = (now - timedelta(days=2)).date()
-                            if publish_date.date() <= two_days_ago:
-                                users_48h = data_48h_dict.get(page_path_lower, 0)
-                        
-                        users_24h_list.append(users_24h)
-                        users_48h_list.append(users_48h)
-                        
-                except Exception as e:
-                    # 에러 발생 시 0으로 채움
-                    users_24h_list = [0] * len(df_sorted)
-                    users_48h_list = [0] * len(df_sorted)
-            else:
-                users_24h_list = [0] * len(df_sorted)
-                users_48h_list = [0] * len(df_sorted)
-        else:
-            users_24h_list = [0] * len(df_sorted)
-            users_48h_list = [0] * len(df_sorted)
-        
-        df_sorted['조회수_24h'] = users_24h_list
-        df_sorted['조회수_48h'] = users_48h_list
-        
         def is_excluded_author(row):
             a = str(row['작성자']).lower().replace(' ', '')
             if '인기기사' in a: return True
@@ -642,11 +517,6 @@ def load_all_dashboard_data(selected_week):
         exclude_mask_author = df_sorted.apply(is_excluded_author, axis=1)
         df_top10 = df_sorted[~exclude_mask_author].copy()
         df_top10['순위'] = range(1, len(df_top10)+1)
-        # 조회수_24h, 조회수_48h 컬럼이 있는지 확인하고 없으면 추가
-        if '조회수_24h' not in df_top10.columns:
-            df_top10['조회수_24h'] = 0
-        if '조회수_48h' not in df_top10.columns:
-            df_top10['조회수_48h'] = 0
         df_top10 = df_top10.rename(columns={'pageTitle': '제목', 'pagePath': '경로', 'screenPageViews': '전체조회수', 'activeUsers': '전체방문자수', 'userEngagementDuration': '평균체류시간', 'bounceRate': '이탈률'})
         
         df_raw_all = df_raw_top.copy()
@@ -828,51 +698,10 @@ def load_all_dashboard_data(selected_week):
                 df_all_articles_with_metadata = pd.DataFrame()
         else:
             df_all_articles_with_metadata = pd.DataFrame()
-        
-        # 7. 전체 기사에 대한 유입경로 데이터 수집 (5페이지용)
-        df_all_articles_sources = pd.DataFrame()
-        if not df_all_articles_with_metadata.empty:
-            all_paths = df_all_articles_with_metadata['경로'].tolist()
-            
-            if all_paths:
-                # 전체 기사의 paths를 필터로 사용하여 유입경로 데이터 조회
-                filter_all_paths = FilterExpression(
-                    filter=Filter(
-                        field_name="pagePath",
-                        in_list_filter=Filter.InListFilter(values=all_paths, case_sensitive=False)
-                    )
-                )
-                
-                # 유입경로 데이터 수집 (pagePath, sessionSource별 조회수)
-                df_all_sources_raw = run_ga4_report(
-                    s_dt, e_dt, 
-                    ["pagePath", "sessionSource"], 
-                    ["screenPageViews"], 
-                    limit=10000, 
-                    dimension_filter=filter_all_paths
-                )
-                
-                if not df_all_sources_raw.empty:
-                    # category (네이버, 구글 등) 매핑
-                    df_all_sources_raw['category'] = df_all_sources_raw['sessionSource'].apply(map_source)
-                    
-                    # (pagePath, category) 그룹핑 + 툴팁용 상세 경로(top_detail) 추출
-                    # 그룹별 최다 유입 raw source 찾기
-                    df_all_grp_best = df_all_sources_raw.sort_values('screenPageViews', ascending=False).drop_duplicates(['pagePath', 'category'])
-                    df_all_grp_best = df_all_grp_best[['pagePath', 'category', 'sessionSource']].rename(columns={'sessionSource': 'top_detail'})
-                    
-                    # 그룹별 조회수 합계
-                    df_all_grp_sum = df_all_sources_raw.groupby(['pagePath', 'category'], as_index=False)['screenPageViews'].sum()
-                    
-                    # 병합 (합계 + 상세경로)
-                    df_all_articles_sources = pd.merge(df_all_grp_sum, df_all_grp_best, on=['pagePath', 'category'], how='left')
-                    df_all_articles_sources = df_all_articles_sources.rename(columns={'category': '유입경로'})
-        else:
-            df_all_articles_sources = pd.DataFrame()
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
-            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata, df_all_articles_sources)
+            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count, df_all_articles_with_metadata)
 
 def get_writers_df_real(df_target):
     # 1. 엑셀 데이터로부터 매핑 딕셔너리 생성 (필명 -> 본명)

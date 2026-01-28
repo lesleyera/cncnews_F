@@ -132,29 +132,17 @@ def render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily,
     """, unsafe_allow_html=True)
 
 # ----------------- 2. 접근 경로 -----------------
-def render_traffic(df_traffic_curr, df_traffic_last, selected_week=None):
+def render_traffic(df_traffic_curr, df_traffic_last):
     st.markdown('<div class="section-header-container"><div class="section-header">2. 주간 접근 경로 분석</div></div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     
-    # 주차 번호 추출
-    current_week_num = ""
-    last_week_num = ""
-    if selected_week:
-        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
-        if current_week_num:
-            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
+    fig1 = px.pie(df_traffic_curr, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
+    fig1.update_layout(height=350, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
+    with c1: st.plotly_chart(fig1, use_container_width=True, key="traffic_curr_chart")
     
-    with c1: 
-        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
-        fig1 = px.pie(df_traffic_curr, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
-        fig1.update_layout(height=350, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
-        st.plotly_chart(fig1, use_container_width=True, key="traffic_curr_chart")
-    
-    with c2: 
-        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
-        fig2 = px.pie(df_traffic_last, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
-        fig2.update_layout(height=280, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
-        st.plotly_chart(fig2, use_container_width=True, key="traffic_last_chart")
+    fig2 = px.pie(df_traffic_last, names='유입경로', values='조회수', hole=0.5, color_discrete_sequence=CHART_PALETTE)
+    fig2.update_layout(height=280, showlegend=True, margin=dict(t=30, b=80, l=40, r=40))
+    with c2: st.plotly_chart(fig2, use_container_width=True, key="traffic_last_chart")
     
     st.markdown('<div class="sub-header">주요 유입경로 비중 변화</div>', unsafe_allow_html=True)
     df_m = pd.merge(df_traffic_curr, df_traffic_last, on='유입경로', suffixes=('_이번', '_지난'))
@@ -177,28 +165,20 @@ def render_traffic(df_traffic_curr, df_traffic_last, selected_week=None):
     """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (지역) -----------------
-def render_demo_region(df_region_curr, df_region_last, selected_week=None):
+def render_demo_region(df_region_curr, df_region_last):
     st.markdown('<div class="section-header-container"><div class="section-header">3. 주간 전체 방문자 특성 분석 (지역)</div></div>', unsafe_allow_html=True)
     st.markdown("<div class='sub-header'>지역별 분석</div>", unsafe_allow_html=True)
     c_curr, c_last = st.columns(2)
     custom_margin = dict(t=20, b=20, l=0, r=0)
     
-    # 주차 번호 추출
-    current_week_num = ""
-    last_week_num = ""
-    if selected_week:
-        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
-        if current_week_num:
-            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
-    
     with c_curr:
-        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
+        st.markdown(f"**이번주**")
         fig_c = create_donut_chart_with_val(df_region_curr, '구분', 'activeUsers', None, height=350, margin=custom_margin, rotation=90, show_legend=True, limit_labels=5)
         fig_c.update_traces(textfont_size=11)
         st.plotly_chart(fig_c, use_container_width=True, key="region_curr_chart")
         
     with c_last:
-        st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
+        st.markdown(f"**지난주 (비교)**")
         fig_l = create_donut_chart_with_val(df_region_last, '구분', 'activeUsers', None, height=280, margin=custom_margin, rotation=90, show_legend=True, limit_labels=5)
         fig_l.update_traces(textfont_size=11)
         st.plotly_chart(fig_l, use_container_width=True, key="region_last_chart")
@@ -232,20 +212,12 @@ def render_demo_region(df_region_curr, df_region_last, selected_week=None):
     """, unsafe_allow_html=True)
 
 # ----------------- 3. 방문자 특성 (연령/성별) -----------------
-def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last, selected_week=None):
+def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_last):
     st.markdown('<div class="section-header-container"><div class="section-header">3. 주간 전체 방문자 특성 분석 (연령/성별)</div></div>', unsafe_allow_html=True)
     sub_titles = ['연령별', '성별']
     curr_data = [df_age_curr, df_gender_curr]
     last_data = [df_age_last, df_gender_last]
     color_maps = [None, COLOR_GENDER]
-    
-    # 주차 번호 추출
-    current_week_num = ""
-    last_week_num = ""
-    if selected_week:
-        current_week_num = re.search(r'\d+', selected_week).group() if re.search(r'\d+', selected_week) else ""
-        if current_week_num:
-            last_week_num = str(int(current_week_num) - 1) if int(current_week_num) > 1 else "52"
     
     for i in range(2):
         st.markdown(f"<div class='sub-header'>{sub_titles[i]} 분석</div>", unsafe_allow_html=True)
@@ -254,13 +226,13 @@ def render_demo_age_gender(df_age_curr, df_age_last, df_gender_curr, df_gender_l
         d_l = last_data[i]
         
         with c_curr:
-            st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">이번주({current_week_num}주차)</div>', unsafe_allow_html=True)
+            st.markdown(f"**이번주**")
             if d_c.empty or d_c['activeUsers'].sum() == 0:
                 st.warning("⚠️ 이번주 데이터 없음 (GA4 비식별 처리)")
             else:
                 st.plotly_chart(create_donut_chart_with_val(d_c, '구분', 'activeUsers', color_maps[i]), use_container_width=True, key=f"demo_curr_{i}_chart")
         with c_last:
-            st.markdown(f'<div style="font-size: 1.1rem; font-weight: 700; color: {COLOR_NAVY}; margin-bottom: 10px; text-align: center;">지난주({last_week_num}주차)</div>', unsafe_allow_html=True)
+            st.markdown(f"**지난주 (비교)**")
             if d_l.empty or d_l['activeUsers'].sum() == 0:
                 st.info("지난주 데이터 없음")
             else:
@@ -307,26 +279,13 @@ def render_top10_detail(df_top10):
         if '작성자' in df_p4.columns:
             df_p4['작성자'] = df_p4['작성자'].apply(clean_author_name)
         df_p4_display = df_p4.copy()
-        # 24시간, 48시간 조회수 포맷팅
-        if '조회수_24h' in df_p4.columns:
-            df_p4['24시간조회수'] = df_p4['조회수_24h'].apply(safe_format_int)
-        else:
-            df_p4['24시간조회수'] = '0'
-        if '조회수_48h' in df_p4.columns:
-            df_p4['48시간조회수'] = df_p4['조회수_48h'].apply(safe_format_int)
-        else:
-            df_p4['48시간조회수'] = '0'
-        
-        df_p4_display = df_p4.copy()
         df_p4_display = df_p4_display.rename(columns={
             '전체조회수': '최근 7일간 조회수',
             '전체방문자수': '최근 7일간 방문자수',
             '체류시간_fmt': '체류시간',
-            '최다유입': '최다 유입경로',
-            '24시간조회수': '24시간',
-            '48시간조회수': '48시간'
+            '최다유입': '최다 유입경로'
         })
-        cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','24시간','48시간','좋아요','댓글']
+        cols = ['순위','카테고리','세부카테고리','제목','작성자','발행일시','최근 7일간 조회수','최근 7일간 방문자수','신규방문자비율','최다 유입경로','체류시간','좋아요','댓글']
         st.dataframe(df_p4_display[cols], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
@@ -367,104 +326,39 @@ def render_top10_trends(df_top10, df_top10_sources=None):
             
         st.dataframe(df_p5[cols], use_container_width=True, hide_index=True, height="content")
         
-        # 그래프: 조회수 높은 기사 10개의 유입경로 분포
         if df_top10_sources is not None and not df_top10_sources.empty:
-            # TOP 10 기사의 경로 정규화 함수
-            def normalize_path(path):
-                """경로를 정규화하여 매칭 정확도 향상"""
-                if pd.isna(path) or not path:
-                    return ""
-                path_str = str(path).strip()
-                # 슬래시 정규화 (여러 개의 슬래시를 하나로)
-                path_str = re.sub(r'/+', '/', path_str)
-                # 앞뒤 슬래시 제거 후 소문자 변환
-                path_str = path_str.strip('/').lower()
-                return path_str
-            
-            # TOP 10 기사의 경로와 제목, 순위 매핑 (정규화된 경로 사용)
-            df_top10_normalized = df_top10.copy()
-            df_top10_normalized['경로_normalized'] = df_top10_normalized['경로'].apply(normalize_path)
-            
-            path_to_title = dict(zip(df_top10_normalized['경로_normalized'], df_top10_normalized['제목']))
-            path_to_rank = dict(zip(df_top10_normalized['경로_normalized'], df_top10_normalized['순위']))
-            path_to_original = dict(zip(df_top10_normalized['경로_normalized'], df_top10_normalized['경로']))
-            
-            # df_top10_sources의 pagePath도 정규화
+            path_to_title = dict(zip(df_top10['경로'], df_top10['제목']))
             df_src = df_top10_sources.copy()
-            df_src['pagePath_normalized'] = df_src['pagePath'].apply(normalize_path)
+            df_src['기사제목'] = df_src['pagePath'].map(path_to_title).fillna('기타')
             
-            # TOP 10 기사에 해당하는 데이터만 필터링 (정규화된 경로로 정확한 매칭)
-            top10_paths_normalized = set(path_to_title.keys())
-            df_src_filtered = df_src[df_src['pagePath_normalized'].isin(top10_paths_normalized)].copy()
+            df_src['기사제목_short'] = df_src['기사제목'].apply(lambda x: x[:10] + '...' if len(str(x)) > 10 else str(x))
             
-            if not df_src_filtered.empty:
-                # 기사제목, 순위, 원본 경로 매핑
-                df_src_filtered['기사제목'] = df_src_filtered['pagePath_normalized'].map(path_to_title)
-                df_src_filtered['순위'] = df_src_filtered['pagePath_normalized'].map(path_to_rank)
-                df_src_filtered['원본경로'] = df_src_filtered['pagePath_normalized'].map(path_to_original)
-                
-                # 순위 순서대로 정렬 (1위부터 10위까지)
-                df_src_filtered = df_src_filtered.sort_values(['순위', 'screenPageViews'], ascending=[True, False])
-                
-                # 각 기사별로 유입경로별 조회수 확인 (디버깅용)
-                # 모든 TOP 10 기사가 포함되어 있는지 확인
-                found_ranks = set(df_src_filtered['순위'].unique())
-                expected_ranks = set(range(1, min(11, len(df_top10) + 1)))
-                missing_ranks = expected_ranks - found_ranks
-                
-                if missing_ranks:
-                    st.warning(f"⚠️ 일부 기사의 유입경로 데이터가 없습니다: {sorted(missing_ranks)}위")
-                
-                # 기사제목 요약 (차트 표시용)
-                df_src_filtered['기사제목_short'] = df_src_filtered['기사제목'].apply(
-                    lambda x: x[:20] + '...' if len(str(x)) > 20 else str(x)
-                )
-                
-                # 순위 순서대로 제목 리스트 생성 (차트 y축 순서)
-                title_order = df_top10.sort_values('순위')['제목'].apply(
-                    lambda x: (x[:20] + '...' if len(str(x)) > 20 else str(x))
-                ).tolist()
-                title_order.reverse()  # 차트는 아래에서 위로 표시되므로 역순
-                
-                # 가로 막대그래프 생성
-                fig = px.bar(
-                    df_src_filtered, 
-                    x='screenPageViews',   
-                    y='기사제목_short',     
-                    color='유입경로',
-                    text='screenPageViews',
-                    title='TOP 10 기사별 유입경로 비중',
-                    orientation='h',       
-                    color_discrete_sequence=CHART_PALETTE,
-                    hover_data={'top_detail': True, 'screenPageViews': True, '기사제목': True, '기사제목_short': False, '순위': True, '원본경로': True}
-                )
-                
-                fig.update_traces(
-                    hovertemplate='<b>%{y}</b><br>순위: %{customdata[4]}위<br>유입경로: %{legendgroup}<br>상세경로: %{customdata[0]}<br>조회수: %{x:,.0f}<extra></extra>',
-                    texttemplate='%{text:,.0f}',
-                    textposition='inside'
-                )
-                
-                fig.update_layout(
-                    plot_bgcolor='white',
-                    xaxis_title='조회수',
-                    yaxis_title='기사 (요약)',
-                    legend_title_text='유입경로',
-                    height=600,
-                    barmode='stack'  # 누적 막대그래프로 표시
-                )
-                
-                # y축 순서를 순위대로 설정
-                fig.update_yaxes(categoryorder='array', categoryarray=title_order)
-                
-                st.plotly_chart(fig, use_container_width=True, key="top10_source_distribution_chart")
-            else:
-                st.warning("TOP 10 기사에 해당하는 유입경로 데이터가 없습니다. 경로 매칭을 확인해주세요.")
-                # 디버깅 정보 표시
-                if not df_top10.empty:
-                    st.info(f"TOP 10 기사 경로 샘플: {df_top10_normalized['경로_normalized'].head(3).tolist()}")
-                if not df_src.empty:
-                    st.info(f"유입경로 데이터 경로 샘플: {df_src['pagePath_normalized'].head(3).tolist()}")
+            short_titles_ordered = [t[:10] + '...' if len(str(t)) > 10 else str(t) for t in df_top10['제목'].tolist()]
+            short_titles_ordered.reverse()
+            
+            fig = px.bar(
+                df_src, 
+                x='screenPageViews',   
+                y='기사제목_short',     
+                color='유입경로',
+                text='screenPageViews',
+                title='기사별 유입경로 비중',
+                orientation='h',       
+                color_discrete_sequence=CHART_PALETTE,
+                hover_data={'top_detail': True, 'screenPageViews': True, '기사제목': True, '기사제목_short': False}
+            )
+            
+            fig.update_traces(hovertemplate='<b>%{y}</b><br>유입경로: %{legendgroup}<br>상세경로: %{customdata[0]}<br>조회수: %{x}<extra></extra>')
+            
+            fig.update_layout(
+                plot_bgcolor='white',
+                xaxis_title='조회수',
+                yaxis_title='기사 (요약)',
+                legend_title_text='유입경로'
+            )
+            fig.update_yaxes(categoryorder='array', categoryarray=short_titles_ordered)
+            
+            st.plotly_chart(fig, use_container_width=True, key="top10_source_distribution_chart")
         else:
             st.warning("기사별 유입경로 상세 데이터가 없습니다.")
     
@@ -474,7 +368,7 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     <strong>산식:</strong><br>
     • 유입경로별 조회수: GA4 sessionSource별 screenPageViews 합계<br>
     • 유입경로 1순위: 해당 기사에 가장 많이 유입된 경로<br>
-    • 조회수 분포: TOP 10 기사별 유입경로(매체)별 조회수 비중
+    • 조회수 분포: 기사별 유입경로(매체)별 조회수 비중
     </div>
     """, unsafe_allow_html=True)
 
