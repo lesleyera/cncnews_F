@@ -535,38 +535,37 @@ def load_all_dashboard_data(selected_week):
         
         # 병렬 처리로 성능 개선
         def fetch_users_for_article(row_data):
-            """기사별 24시간, 48시간 방문자수 계산"""
+            """기사별 24시간, 48시간 방문자수 계산 - 발행일시 기준 누적"""
             page_path, reg_date_str = row_data
             publish_date = parse_publish_date(reg_date_str)
             
             if not publish_date:
                 return 0, 0
             
-            # 현재 시간 확인 (미래 날짜는 처리하지 않음)
+            # 현재 시간 확인
             now = datetime.now()
-            if publish_date > now:
+            now_date = now.date()
+            
+            # 발행일시가 미래이면 0 반환
+            if publish_date.date() > now_date:
                 return 0, 0
             
             # 발행일시 + 24시간, 48시간 후 날짜 계산
             end_date_24h = publish_date + timedelta(hours=24)
             end_date_48h = publish_date + timedelta(hours=48)
             
-            # 현재 시간을 넘지 않도록 제한
-            end_date_24h = min(end_date_24h, now)
-            end_date_48h = min(end_date_48h, now)
+            # 현재 날짜를 넘지 않도록 제한
+            end_date_24h_date = min(end_date_24h.date(), now_date)
+            end_date_48h_date = min(end_date_48h.date(), now_date)
             
-            start_date_str = publish_date.strftime('%Y-%m-%d')
-            end_date_24h_str = end_date_24h.strftime('%Y-%m-%d')
-            end_date_48h_str = end_date_48h.strftime('%Y-%m-%d')
+            start_date = publish_date.date()
             
-            # GA4는 날짜 단위로만 조회 가능하므로, 발행일시 날짜부터 end_date 날짜까지 조회
-            filter_24h = FilterExpression(
-                filter=Filter(
-                    field_name="pagePath",
-                    in_list_filter=Filter.InListFilter(values=[page_path], case_sensitive=False)
-                )
-            )
-            filter_48h = FilterExpression(
+            # 시작일이 종료일보다 크면 0 반환
+            if start_date > end_date_24h_date:
+                return 0, 0
+            
+            # GA4 필터 설정
+            filter_path = FilterExpression(
                 filter=Filter(
                     field_name="pagePath",
                     in_list_filter=Filter.InListFilter(values=[page_path], case_sensitive=False)
@@ -577,29 +576,39 @@ def load_all_dashboard_data(selected_week):
             users_48h = 0
             
             try:
-                # activeUsers (방문자수)로 변경
-                df_24h = run_ga4_report(start_date_str, end_date_24h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_24h)
+                # 24시간: 발행일시 날짜부터 24시간 후 날짜까지의 전체 기간에 대해 한 번에 조회
+                start_date_str = start_date.strftime('%Y-%m-%d')
+                end_date_24h_str = end_date_24h_date.strftime('%Y-%m-%d')
+                
+                # pagePath만 dimension으로 사용 (전체 기간의 누적 activeUsers)
+                df_24h = run_ga4_report(start_date_str, end_date_24h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_path)
+                
                 if not df_24h.empty:
-                    # pagePath가 일치하는 행 찾기
-                    matching_row = df_24h[df_24h['pagePath'].str.lower() == page_path.lower()]
-                    if not matching_row.empty:
-                        users_24h = int(matching_row['activeUsers'].iloc[0])
-                    elif len(df_24h) > 0:
-                        # 정확히 일치하지 않으면 첫 번째 행 사용 (필터가 작동했다면)
+                    # pagePath가 일치하는 행 찾기 (대소문자 무시)
+                    matching_rows = df_24h[df_24h['pagePath'].astype(str).str.lower().str.strip() == str(page_path).lower().strip()]
+                    if not matching_rows.empty:
+                        users_24h = int(matching_rows['activeUsers'].iloc[0])
+                    elif len(df_24h) == 1:
+                        # 필터가 작동해서 하나의 행만 반환된 경우
                         users_24h = int(df_24h['activeUsers'].iloc[0])
             except Exception as e:
                 users_24h = 0
             
             try:
-                # activeUsers (방문자수)로 변경
-                df_48h = run_ga4_report(start_date_str, end_date_48h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_48h)
+                # 48시간: 발행일시 날짜부터 48시간 후 날짜까지의 전체 기간에 대해 한 번에 조회
+                start_date_str = start_date.strftime('%Y-%m-%d')
+                end_date_48h_str = end_date_48h_date.strftime('%Y-%m-%d')
+                
+                # pagePath만 dimension으로 사용 (전체 기간의 누적 activeUsers)
+                df_48h = run_ga4_report(start_date_str, end_date_48h_str, ["pagePath"], ["activeUsers"], limit=100, dimension_filter=filter_path)
+                
                 if not df_48h.empty:
-                    # pagePath가 일치하는 행 찾기
-                    matching_row = df_48h[df_48h['pagePath'].str.lower() == page_path.lower()]
-                    if not matching_row.empty:
-                        users_48h = int(matching_row['activeUsers'].iloc[0])
-                    elif len(df_48h) > 0:
-                        # 정확히 일치하지 않으면 첫 번째 행 사용 (필터가 작동했다면)
+                    # pagePath가 일치하는 행 찾기 (대소문자 무시)
+                    matching_rows = df_48h[df_48h['pagePath'].astype(str).str.lower().str.strip() == str(page_path).lower().strip()]
+                    if not matching_rows.empty:
+                        users_48h = int(matching_rows['activeUsers'].iloc[0])
+                    elif len(df_48h) == 1:
+                        # 필터가 작동해서 하나의 행만 반환된 경우
                         users_48h = int(df_48h['activeUsers'].iloc[0])
             except Exception as e:
                 users_48h = 0
