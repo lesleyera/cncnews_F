@@ -478,6 +478,7 @@ def load_all_dashboard_data(selected_week):
         df_top10_sources = pd.DataFrame()
     
     # 전체 활성 기사 데이터 정리 (발행기사 수 계산용)
+    published_article_count = 0
     if not df_raw_all_articles.empty:
         def is_excluded_all(row):
             t = str(row['pageTitle']).lower().replace(' ', '')
@@ -489,12 +490,47 @@ def load_all_dashboard_data(selected_week):
         # 기사 경로 필터링
         mask_article_all = df_raw_all_articles_filtered['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
         df_raw_all_articles_filtered = df_raw_all_articles_filtered[mask_article_all].copy()
+        
+        # 해당 주차에 신규 발행된 기사 건수 계산 (발행일시 기준)
+        if not df_raw_all_articles_filtered.empty:
+            # 전체 활성 기사에 대해 크롤링 수행 (병렬 처리)
+            all_paths = df_raw_all_articles_filtered['pagePath'].tolist()
+            published_dates_dict = {}
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                futures = {executor.submit(crawl_single_article_cached, path): path for path in all_paths}
+                for future in concurrent.futures.as_completed(futures):
+                    path = futures[future]
+                    try:
+                        result = future.result(timeout=3.0)
+                        # result는 (author, likes, comments, cat, subcat, reg_date) 튜플
+                        reg_date = result[5] if len(result) > 5 else "-"
+                        published_dates_dict[path] = reg_date
+                    except:
+                        published_dates_dict[path] = "-"
+            
+            # 발행일시가 해당 주차 범위 내에 있는 기사만 카운트
+            s_dt_date = datetime.strptime(s_dt, '%Y-%m-%d').date()
+            e_dt_date = datetime.strptime(e_dt, '%Y-%m-%d').date()
+            
+            def is_published_in_week(reg_date_str):
+                if reg_date_str == "-" or not reg_date_str:
+                    return False
+                try:
+                    # "2026-01-07 14:30" 또는 "2026-01-07" 형식 파싱
+                    date_part = reg_date_str.split()[0] if ' ' in reg_date_str else reg_date_str
+                    pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                    return s_dt_date <= pub_date <= e_dt_date
+                except:
+                    return False
+            
+            published_article_count = sum(1 for path in all_paths if is_published_in_week(published_dates_dict.get(path, "-")))
     else:
         df_raw_all_articles_filtered = pd.DataFrame()
 
     return (sel_uv, sel_pv, df_daily, df_weekly, df_traffic_curr, df_traffic_last, 
             df_region_curr, df_region_last, df_age_curr, df_age_last, df_gender_curr, df_gender_last, 
-            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, df_raw_all_articles_filtered)
+            df_top10, df_raw_all, new_visitor_ratio, search_inflow_ratio, active_article_count, df_top10_sources, published_article_count)
 
 def get_writers_df_real(df_target):
     # 1. 엑셀 데이터로부터 매핑 딕셔너리 생성 (필명 -> 본명)

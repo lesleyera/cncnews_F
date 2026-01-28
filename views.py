@@ -116,11 +116,12 @@ def render_summary(df_weekly, cur_pv, cur_uv, new_ratio, search_ratio, df_daily,
     <div style='font-size: 0.85rem; color: #78909c; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e0e0;'>
     <strong>산식:</strong><br>
     • 활성 기사 수: 클릭이 발생한 기사 경로 수 (GA4 pagePath 기준)<br>
-    • 발행 기사 수: 전체 활성 기사 수<br>
+    • 발행 기사 수: 해당 주차에 신규 발행된 기사 건수 (발행일시 기준)<br>
     • 조회수(PV): GA4 screenPageViews 합계<br>
     • 방문자수(UV): GA4 activeUsers 합계<br>
     • 방문자당 페이지뷰: PV ÷ UV<br>
     • 신규 방문자 비율: (신규 방문자 수 ÷ 전체 방문자 수) × 100<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;※ 신규 방문자 수: GA4 newUsers (해당 기간 동안 처음 방문한 사용자 수)<br>
     • 검색 유입 비율: (검색엔진 유입 조회수 ÷ 전체 조회수) × 100
     </div>
     """, unsafe_allow_html=True)
