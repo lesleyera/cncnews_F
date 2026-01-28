@@ -255,7 +255,19 @@ def load_all_dashboard_data(selected_week):
             match = re.search(r'\d+', str(x))
             return int(match.group()) if match else 0
         df_weekly['week_num'] = df_weekly['주차'].apply(extract_week_num)
-        def sort_key(row): return 1000 + row['week_num'] if row['week_num'] == 1 else row['week_num']
+        
+        # 2026년 1,2,3,4주차는 2025년 51주차 오른편에 순차적으로 배치
+        # 주차 번호 리스트를 확인하여 연도 경계 처리
+        week_nums = df_weekly['week_num'].tolist()
+        max_week = max(week_nums) if week_nums else 0
+        
+        def sort_key(row):
+            week_num = row['week_num']
+            # 1~4주차이고, 최대 주차가 49 이상이면 (연도 경계) 52 + week_num으로 정렬
+            if week_num <= 4 and max_week >= 49:
+                return 52 + week_num
+            return week_num
+        
         df_weekly['sort_key'] = df_weekly.apply(sort_key, axis=1)
         df_weekly = df_weekly.sort_values('sort_key').drop(columns=['sort_key'])
     
@@ -340,13 +352,15 @@ def load_all_dashboard_data(selected_week):
     # 6-0. 전체 활성 기사 데이터 가져오기 (활성기사 수, 발행기사 수 계산용)
     df_raw_all_articles = run_ga4_report(s_dt, e_dt, ["pageTitle", "pagePath"], ["screenPageViews", "activeUsers", "newUsers", "userEngagementDuration", "bounceRate"], "screenPageViews", limit=None)
     
-    # 활성기사 수 계산 (전체 활성 기사 기준)
+    # 활성기사 수 계산 (전체 활성 기사 기준, 동일 기사는 합산)
     active_article_count = 0
     if not df_raw_all_articles.empty:
         mask_article = df_raw_all_articles['pagePath'].str.contains(r'article|news|view|story', case=False, regex=True, na=False)
-        active_article_count = df_raw_all_articles[mask_article].shape[0]
-        if active_article_count == 0:
-            active_article_count = df_raw_all_articles[df_raw_all_articles['pagePath'].str.len() > 1].shape[0]
+        df_articles = df_raw_all_articles[mask_article]
+        if df_articles.empty:
+            df_articles = df_raw_all_articles[df_raw_all_articles['pagePath'].str.len() > 1]
+        # 동일 기사(pagePath)는 합산하여 고유 기사 수 계산
+        active_article_count = df_articles['pagePath'].nunique()
     
     # TOP 10 선정용 데이터 (크롤링은 top10만 수행)
     df_raw_top = run_ga4_report(s_dt, e_dt, ["pageTitle", "pagePath"], ["screenPageViews", "activeUsers", "newUsers", "userEngagementDuration", "bounceRate"], "screenPageViews", limit=100)
