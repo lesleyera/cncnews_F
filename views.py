@@ -608,21 +608,23 @@ def render_writer_integrated(writers_df, df_all_articles_with_metadata):
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 필명 기준: 필명별 합산 (필명이 본명과 다른 경우만)
+        # 필명 기준: 필명별 합산 (모든 필명 포함)
         df_work_pen = df_all_articles_with_metadata.copy()
         df_work_pen['본명_mapped'] = df_work_pen['작성자'].map(pen_to_real_map)
-        # 필명이 본명과 다른 경우만 필터링
-        df_work_pen_filtered = df_work_pen[df_work_pen['본명_mapped'].notna() & (df_work_pen['작성자'] != df_work_pen['본명_mapped'])].copy()
+        # 필명 기준은 모든 작성자(필명)를 포함 (본명과 같은 경우도 포함)
+        # 단, 매핑이 없는 경우는 본명으로 사용
+        df_work_pen['본명'] = df_work_pen['본명_mapped'].fillna(df_work_pen['작성자'])
         
-        if not df_work_pen_filtered.empty:
-            writers_by_pen = df_work_pen_filtered.groupby('작성자').agg(
+        if not df_work_pen.empty:
+            writers_by_pen = df_work_pen.groupby('작성자').agg(
                 기사수=('제목','count'), 
                 총조회수=('전체조회수','sum'),
                 좋아요=('좋아요', 'sum'),
                 댓글=('댓글', 'sum')
             ).reset_index()
             writers_by_pen = writers_by_pen.rename(columns={'작성자': '필명'})
-            writers_by_pen['본명'] = writers_by_pen['필명'].map(pen_to_real_map)
+            # 본명 매핑 (매핑이 없으면 필명 그대로)
+            writers_by_pen['본명'] = writers_by_pen['필명'].map(pen_to_real_map).fillna(writers_by_pen['필명'])
             writers_by_pen = writers_by_pen.sort_values('총조회수', ascending=False)
             writers_by_pen['순위'] = range(1, len(writers_by_pen)+1)
             writers_by_pen['평균조회수'] = (writers_by_pen['총조회수']/writers_by_pen['기사수']).astype(int)
