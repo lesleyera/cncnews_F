@@ -9,6 +9,9 @@ import re
 # 모듈 임포트
 import config
 from config import COLOR_NAVY, COLOR_RED, COLOR_GREY, CHART_PALETTE, COLOR_GENDER
+from utils import WEEK_MAP
+from datetime import datetime, timedelta
+import data
 
 # ----------------- 차트 생성 헬퍼 함수 -----------------
 def create_donut_chart_with_val(df, names, values, color_map=None, height=350, margin=None, rotation=90, show_legend=False, limit_labels=None):
@@ -370,42 +373,170 @@ def render_top10_trends(df_top10, df_top10_sources=None):
     """, unsafe_allow_html=True)
 
 # ----------------- 6. 카테고리 -----------------
-def render_category(df_top10):
+def render_category(df_top10, selected_week=None):
     st.markdown('<div class="section-header-container"><div class="section-header">6. 카테고리별 분석</div></div>', unsafe_allow_html=True)
     if not df_top10.empty:
         df_real = df_top10
+        
+        # 전주 데이터 가져오기
+        if selected_week and selected_week in WEEK_MAP:
+            dr = WEEK_MAP[selected_week]
+            s_dt = dr.split(' ~ ')[0].replace('.', '-')
+            e_dt = dr.split(' ~ ')[1].replace('.', '-')
+            ls_dt = (datetime.strptime(s_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
+            le_dt = (datetime.strptime(e_dt, '%Y-%m-%d')-timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            # 전주 발행 기사 목록 페이지 크롤링
+            from data import crawl_article_list_page, crawl_single_article_cached
+            import concurrent.futures
+            
+            published_articles_last_week = []
+            for page_num in range(1, 6):  # 최대 5페이지만 확인 (성능 고려)
+                articles = crawl_article_list_page(page_num)
+                if not articles:
+                    break
+                for article in articles:
+                    pub_date_str = article.get('published_date', '-')
+                    if pub_date_str == '-':
+                        continue
+                    try:
+                        date_part = pub_date_str.split()[0] if ' ' in pub_date_str else pub_date_str
+                        if '.' in date_part:
+                            date_part = date_part.replace('.', '-')
+                        pub_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                        ls_dt_date = datetime.strptime(ls_dt, '%Y-%m-%d').date()
+                        le_dt_date = datetime.strptime(le_dt, '%Y-%m-%d').date()
+                        if ls_dt_date <= pub_date <= le_dt_date:
+                            published_articles_last_week.append(article)
+                        elif pub_date < ls_dt_date:
+                            break  # 더 오래된 기사는 중단
+                    except:
+                        continue
+            
+            # 전주 발행 기사의 카테고리 정보 크롤링
+            cat_main_last_dict = {}
+            cat_sub_last_dict = {}
+            scraped_last_week = {}
+            if published_articles_last_week:
+                last_week_paths = [a['path'] for a in published_articles_last_week[:50]]  # 최대 50개만 (성능 고려)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {executor.submit(crawl_single_article_cached, path): path for path in last_week_paths}
+                    for future in concurrent.futures.as_completed(futures):
+                        path = futures[future]
+                        try:
+                            result = future.result(timeout=3.0)
+                            scraped_last_week[path] = result
+                        except:
+                            scraped_last_week[path] = ("관리자", 0, 0, "뉴스", "이슈", "-")
+                
+                # 카테고리별 기사 수 집계
+                for path, result in scraped_last_week.items():
+                    cat = result[3] if len(result) > 3 else "뉴스"
+                    subcat = result[4] if len(result) > 4 else "이슈"
+                    cat_main_last_dict[cat] = cat_main_last_dict.get(cat, 0) + 1
+                    key = (cat, subcat)
+                    cat_sub_last_dict[key] = cat_sub_last_dict.get(key, 0) + 1
+        else:
+            cat_main_last_dict = {}
+            cat_sub_last_dict = {}
+        
         # 메인 카테고리
         cat_main = df_real.groupby('카테고리').agg(기사수=('제목','count'), 전체조회수=('전체조회수','sum')).reset_index()
         total_main = cat_main['기사수'].sum()
-        # [수정] 기사수 (비중%) 형태로 병합
-        cat_main['기사수'] = cat_main.apply(lambda x: f"{x['기사수']} ({x['기사수']/total_main*100:.1f}%)", axis=1)
+        cat_main['기사수_num'] = cat_main['기사수']
         
+        # 전주 카테고리 데이터프레임 생성
+        cat_main_last = pd.DataFrame(columns=['카테고리', '기사수'])
+        for cat in cat_main['카테고리'].unique():
+            count = cat_main_last_dict.get(cat, 0)
+            cat_main_last = pd.concat([cat_main_last, pd.DataFrame({'카테고리': [cat], '기사수': [count]})], ignore_index=True)
+        
+        # 이번주/전주 비교 데이터 준비
+        cat_main_compare = cat_main[['카테고리', '기사수_num']].copy()
+        cat_main_compare = cat_main_compare.rename(columns={'기사수_num': '이번주'})
+        cat_main_compare = pd.merge(cat_main_compare, cat_main_last[['카테고리', '기사수']], on='카테고리', how='left', suffixes=('', '_last'))
+        cat_main_compare['전주'] = cat_main_compare['기사수'].fillna(0).astype(int)
+        cat_main_compare = cat_main_compare.drop(columns=['기사수'])
+        
+        # 막대그래프용 데이터 변환
+        cat_main_melted = cat_main_compare.melt(id_vars='카테고리', value_vars=['이번주', '전주'], var_name='구분', value_name='기사수')
+        
+        # 기사수 (비중%) 형태로 병합
+        cat_main['기사수'] = cat_main.apply(lambda x: f"{x['기사수']} ({x['기사수']/total_main*100:.1f}%)", axis=1)
         cat_main['전체조회수'] = pd.to_numeric(cat_main['전체조회수'], errors='coerce').fillna(0)
-        cat_main['기사수_num'] = cat_main['기사수'].apply(lambda x: int(x.split('(')[0])) # 차트용 숫자 추출
         
         # [수정] 컬럼명 변경: 기사1건당평균 -> 평균조회수
         cat_main['평균조회수'] = (cat_main['전체조회수'] / cat_main['기사수_num']).astype(int).map('{:,}'.format)
         cat_main['전체조회수'] = cat_main['전체조회수'].map('{:,}'.format)
         
-        st.markdown('<div class="chart-header">1. 메인 카테고리별 기사 수</div>', unsafe_allow_html=True)
-        st.plotly_chart(px.bar(cat_main, x='카테고리', y='기사수_num', text_auto=True, color='카테고리', color_discrete_sequence=CHART_PALETTE).update_layout(showlegend=False, plot_bgcolor='white', yaxis_title="기사수"), use_container_width=True, key="category_main_chart")
+        st.markdown('<div class="chart-header">메인 카테고리별 기사 수</div>', unsafe_allow_html=True)
+        # 이번주/전주 비교 막대그래프
+        max_value = max(cat_main_compare['이번주'].max(), cat_main_compare['전주'].max()) if not cat_main_compare.empty else 0
+        fig_main = px.bar(cat_main_melted, x='카테고리', y='기사수', color='구분', barmode='group', 
+                          color_discrete_map={'이번주': COLOR_NAVY, '전주': COLOR_GREY},
+                          text='기사수')
+        fig_main.update_traces(texttemplate='%{text}', textposition='outside')
+        fig_main.update_layout(showlegend=True, plot_bgcolor='white', yaxis_title="기사수", 
+                              yaxis=dict(range=[0, max_value * 1.2] if max_value > 0 else [0, 10]),
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        st.plotly_chart(fig_main, use_container_width=True, key="category_main_chart")
         st.dataframe(cat_main[['카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True, height="content")
 
         # 세부 카테고리
-        st.markdown('<div class="chart-header">2. 세부 카테고리별 기사 수</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-header">세부 카테고리별 기사 수</div>', unsafe_allow_html=True)
         cat_sub = df_real.groupby(['카테고리', '세부카테고리']).agg(기사수=('제목','count'), 전체조회수=('전체조회수','sum')).reset_index()
         total_sub = cat_sub['기사수'].sum()
+        cat_sub['기사수_num'] = cat_sub['기사수']
+        
+        # 전주 세부 카테고리 데이터
+        cat_sub_last = pd.DataFrame(columns=['카테고리', '세부카테고리', '기사수'])
+        for (cat, subcat), count in cat_sub_last_dict.items():
+            cat_sub_last = pd.concat([cat_sub_last, pd.DataFrame({
+                '카테고리': [cat], 
+                '세부카테고리': [subcat], 
+                '기사수': [count]
+            })], ignore_index=True)
+        
+        # 이번주 카테고리에 없는 전주 카테고리도 추가 (0으로)
+        for _, row in cat_sub.iterrows():
+            key = (row['카테고리'], row['세부카테고리'])
+            if key not in cat_sub_last_dict:
+                cat_sub_last = pd.concat([cat_sub_last, pd.DataFrame({
+                    '카테고리': [row['카테고리']], 
+                    '세부카테고리': [row['세부카테고리']], 
+                    '기사수': [0]
+                })], ignore_index=True)
+        
+        # 이번주/전주 비교 데이터 준비
+        cat_sub_compare = cat_sub[['카테고리', '세부카테고리', '기사수_num']].copy()
+        cat_sub_compare = cat_sub_compare.rename(columns={'기사수_num': '이번주'})
+        cat_sub_compare = pd.merge(cat_sub_compare, cat_sub_last[['카테고리', '세부카테고리', '기사수']], 
+                                   on=['카테고리', '세부카테고리'], how='left', suffixes=('', '_last'))
+        cat_sub_compare['전주'] = cat_sub_compare['기사수'].fillna(0).astype(int)
+        cat_sub_compare = cat_sub_compare.drop(columns=['기사수'])
+        
+        # 막대그래프용 데이터 변환
+        cat_sub_melted = cat_sub_compare.melt(id_vars=['카테고리', '세부카테고리'], value_vars=['이번주', '전주'], 
+                                              var_name='구분', value_name='기사수')
+        
         # [수정] 기사수 (비중%) 형태로 병합
         cat_sub['기사수'] = cat_sub.apply(lambda x: f"{x['기사수']} ({x['기사수']/total_sub*100:.1f}%)", axis=1)
-        
         cat_sub['전체조회수'] = pd.to_numeric(cat_sub['전체조회수'], errors='coerce').fillna(0)
-        cat_sub['기사수_num'] = cat_sub['기사수'].apply(lambda x: int(x.split('(')[0]))
         
         # [수정] 컬럼명 변경: 기사1건당평균 -> 평균조회수
         cat_sub['평균조회수'] = (cat_sub['전체조회수'] / cat_sub['기사수_num']).astype(int).map('{:,}'.format)
         cat_sub['전체조회수'] = cat_sub['전체조회수'].map('{:,}'.format)
         
-        st.plotly_chart(px.bar(cat_sub, x='세부카테고리', y='기사수_num', text_auto=True, color='카테고리', color_discrete_sequence=CHART_PALETTE).update_layout(plot_bgcolor='white', yaxis_title="기사수"), use_container_width=True, key="category_sub_chart")
+        # 이번주/전주 비교 막대그래프
+        max_value_sub = max(cat_sub_compare['이번주'].max(), cat_sub_compare['전주'].max()) if not cat_sub_compare.empty else 0
+        fig_sub = px.bar(cat_sub_melted, x='세부카테고리', y='기사수', color='구분', barmode='group',
+                        color_discrete_map={'이번주': COLOR_NAVY, '전주': COLOR_GREY},
+                        text='기사수')
+        fig_sub.update_traces(texttemplate='%{text}', textposition='outside')
+        fig_sub.update_layout(plot_bgcolor='white', yaxis_title="기사수",
+                             yaxis=dict(range=[0, max_value_sub * 1.2] if max_value_sub > 0 else [0, 10]),
+                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        st.plotly_chart(fig_sub, use_container_width=True, key="category_sub_chart")
         st.dataframe(cat_sub[['카테고리', '세부카테고리', '기사수', '전체조회수', '평균조회수']], use_container_width=True, hide_index=True, height="content")
     
     # 산식 각주
